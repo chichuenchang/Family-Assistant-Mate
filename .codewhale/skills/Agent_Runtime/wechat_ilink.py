@@ -334,6 +334,8 @@ def _log_send_failures() -> None:
 
     def send_message(opts, msg):
         resp = orig(opts, msg)
+        if not isinstance(resp, dict):  # 已发出；日志不得把成功变异常
+            return resp
         ret, errcode = resp.get("ret") or 0, resp.get("errcode") or 0
         log.debug("sendmessage to=%s ctx=%s resp=%s", msg.get("to_user_id"),
                   bool(msg.get("context_token")), str(resp)[:300])

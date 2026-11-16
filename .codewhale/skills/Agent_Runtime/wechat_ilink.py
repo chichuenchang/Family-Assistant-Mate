@@ -325,6 +325,28 @@ def _self_heal_poll(bot) -> None:
     bot.client.poll = _poll_with_selfheal
 
 
+def _log_send_failures() -> None:
+    """SDK 丢弃 sendmessage 响应：HTTP 200 + ret/errcode≠0 时回复静默丢失。包一层记 WARNING。"""
+    from weixin_ilink import api
+    if getattr(api.send_message, "_logged", False):
+        return
+    orig = api.send_message
+
+    def send_message(opts, msg):
+        resp = orig(opts, msg)
+        if not isinstance(resp, dict):  # 已发出；日志不得把成功变异常
+            return resp
+        to = msg.get("to_user_id")
+        ret, errcode = resp.get("ret") or 0, resp.get("errcode") or 0
+        log.debug("sendmessage to=%s ctx=%s resp=%.300s", to, bool(msg.get("context_token")), resp)
+        if ret or errcode:
+            log.warning("sendmessage 失败 to=%s ret=%s errcode=%s resp=%.300s", to, ret, errcode, resp)
+        return resp
+
+    send_message._logged = True
+    api.send_message = send_message
+
+
 def _wire(bot, t: WeChatTransport) -> None:
     """一个账号的 bot 挂上自愈轮询 + 全部消息处理（各账号同一套，共用 t）。"""
     _self_heal_poll(bot)
@@ -420,6 +442,7 @@ def run_bot(relogin: bool = False, account: str | None = None) -> None:
 
     _load_recent_msgs()    # 重启后仍能反查引用的历史消息
     _load_sent_replies()   # bot 出站记录（引用 bot 回复按时间匹配）
+    _log_send_failures()
 
     # 要求重新登录 / 指定账号尚无凭据 / 一个账号都没有 → 扫码
     target = creds_path(account)

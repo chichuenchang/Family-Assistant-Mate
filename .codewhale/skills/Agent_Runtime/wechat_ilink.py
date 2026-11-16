@@ -336,11 +336,11 @@ def _log_send_failures() -> None:
         resp = orig(opts, msg)
         if not isinstance(resp, dict):  # 已发出；日志不得把成功变异常
             return resp
-        to, body = msg.get("to_user_id"), str(resp)[:300]
+        to = msg.get("to_user_id")
         ret, errcode = resp.get("ret") or 0, resp.get("errcode") or 0
-        log.debug("sendmessage to=%s ctx=%s resp=%s", to, bool(msg.get("context_token")), body)
+        log.debug("sendmessage to=%s ctx=%s resp=%.300s", to, bool(msg.get("context_token")), resp)
         if ret or errcode:
-            log.warning("sendmessage 失败 to=%s ret=%s errcode=%s resp=%s", to, ret, errcode, body)
+            log.warning("sendmessage 失败 to=%s ret=%s errcode=%s resp=%.300s", to, ret, errcode, resp)
         return resp
 
     send_message._logged = True

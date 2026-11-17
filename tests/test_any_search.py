@@ -479,7 +479,7 @@ class TestFetchImagesWiring:
         import agent_core
         assert "fetch_images" in agent_core._build_system_prompt()
 
-    def test_multi_path_result_becomes_one_sentinel_each(self, monkeypatch):
+    def test_multi_path_result_becomes_one_image_each(self, monkeypatch):
         import agent_core
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         agent = agent_core.Agent(idle_clear_hours=0)
@@ -492,8 +492,7 @@ class TestFetchImagesWiring:
         ])
         monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
         reply = agent.handle("看看螳螂的图片", user="u", member="Jim")
-        _, imgs, _ = agent_core.split_reply(reply)
-        assert imgs == ["Jim/web_images/a.jpg", "Jim/web_images/b.png"]
+        assert reply.images == ["Jim/web_images/a.jpg", "Jim/web_images/b.png"]
 
     def test_downloads_excluded_from_backup(self):
         import backup_sync as bs

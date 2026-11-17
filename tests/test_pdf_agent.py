@@ -40,10 +40,12 @@ def test_long_timeouts():
     assert agent_core.rt.CLI_TIMEOUTS["pdf-edit"] >= 300
 
 
-def test_doc_sentinel_takes_first_line_only():
-    reply = "⚙️ edit_pdf\n\n好了\n\x01DOC:jim/pdf_edits/x/form_edited.pdf"
-    text, imgs, docs = agent_core.split_reply(reply)
-    assert docs == ["jim/pdf_edits/x/form_edited.pdf"]
+def test_doc_tool_outcome_takes_first_line_only(monkeypatch):
+    reg = agent_core.REGISTRY
+    monkeypatch.setitem(reg.tool_map, "edit_pdf",
+                        lambda a: "jim/pdf_edits/x/form_edited.pdf\n警告: 第 2 页溢出")
+    out = reg.call("edit_pdf", {}, agent_core.Caller(member="Jim"))
+    assert out.docs == ["jim/pdf_edits/x/form_edited.pdf"]
 
 
 def test_system_prompt_describes_one_shot_workflow():

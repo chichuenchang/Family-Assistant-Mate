@@ -81,7 +81,7 @@ def test_idle_clears_history_before_next_message(monkeypatch):
     agent._last_active["u"] = 1_000_000.0
     monkeypatch.setattr(agent_core.time, "time",
                         lambda: 1_000_000.0 + 3 * 3600)  # 闲置 3 小时 > 2
-    agent.handle("新话题", user="u", member="爸爸")  # 无 API key，早退但已过闲置检查
+    agent.handle("新话题", user="u", member="爸爸").text  # 无 API key，早退但已过闲置检查
     assert "u" not in agent.history
     assert agent._last_active["u"] == 1_000_000.0 + 3 * 3600
 
@@ -93,7 +93,7 @@ def test_no_idle_clear_within_window(monkeypatch):
                           {"role": "assistant", "content": "旧回复"}]
     agent._last_active["u"] = 1_000_000.0
     monkeypatch.setattr(agent_core.time, "time", lambda: 1_000_000.0 + 3600)  # 1 小时
-    agent.handle("继续", user="u", member="爸爸")
+    agent.handle("继续", user="u", member="爸爸").text
     assert len(agent.history["u"]) == 2
 
 
@@ -104,7 +104,7 @@ def test_no_idle_clear_when_disabled(monkeypatch):
     agent._last_active["u"] = 1_000_000.0
     monkeypatch.setattr(agent_core.time, "time",
                         lambda: 1_000_000.0 + 1000 * 3600)
-    agent.handle("嗨", user="u", member="爸爸")
+    agent.handle("嗨", user="u", member="爸爸").text
     assert len(agent.history["u"]) == 1
 
 
@@ -117,8 +117,8 @@ def test_idle_clear_is_per_user(monkeypatch):
     agent._last_active["fresh_u"] = 1_000_000.0 + 3 * 3600 - 60
     monkeypatch.setattr(agent_core.time, "time",
                         lambda: 1_000_000.0 + 3 * 3600)
-    agent.handle("x", user="idle_u", member="爸爸")
-    agent.handle("y", user="fresh_u", member="妈妈")
+    agent.handle("x", user="idle_u", member="爸爸").text
+    agent.handle("y", user="fresh_u", member="妈妈").text
     assert "idle_u" not in agent.history
     assert len(agent.history["fresh_u"]) == 1
 
@@ -152,7 +152,7 @@ def _system_text(msgs) -> str:
 def test_system_context_has_current_datetime(monkeypatch):
     agent, captured = _agent_with_captured_llm(monkeypatch)
     monkeypatch.setattr(agent_core, "datetime", _FakeDatetime, raising=False)
-    agent.handle("现在几点", user="u", member="爸爸")
+    agent.handle("现在几点", user="u", member="爸爸").text
     assert captured[0][0]["role"] == captured[0][1]["role"] == "system"   # 静态文档 / 易变块两条
     sys_content = _system_text(captured[0])
     assert "2026-07-11 00:08" in sys_content
@@ -165,9 +165,9 @@ def test_system_datetime_fresh_per_message(monkeypatch):
     agent, captured = _agent_with_captured_llm(monkeypatch)
     monkeypatch.setattr(agent_core, "datetime", _FakeDatetime, raising=False)
     monkeypatch.setattr(_FakeDatetime, "fixed", datetime(2026, 7, 10, 23, 47))
-    agent.handle("test", user="u", member="爸爸")
+    agent.handle("test", user="u", member="爸爸").text
     monkeypatch.setattr(_FakeDatetime, "fixed", datetime(2026, 7, 11, 0, 8))
-    agent.handle("你现在这里几点", user="u", member="爸爸")
+    agent.handle("你现在这里几点", user="u", member="爸爸").text
     assert "2026-07-10 23:47" in _system_text(captured[0])
     assert "2026-07-11 00:08" in _system_text(captured[1])
     assert "2026-07-10 23:47" not in _system_text(captured[1])
@@ -193,7 +193,7 @@ def test_reasoning_content_logged(monkeypatch, caplog):
     ])
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
     with caplog.at_level(logging.INFO, logger="familyassist.agent"):
-        agent.handle("test", user="u", member="爸爸")
+        agent.handle("test", user="u", member="爸爸").text
     assert "先想了一下" in caplog.text
     mid = agent.history["u"][1]   # 第一个 assistant（带 tool_calls），非最终回复
     assert mid["role"] == "assistant" and mid.get("tool_calls")
@@ -207,7 +207,7 @@ def test_reasoning_log_names_fallback_model(monkeypatch, caplog):
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": {
         "content": "好", "reasoning_content": "想", "_fallback": "glm-5.3-flash"})
     with caplog.at_level(logging.INFO, logger="familyassist.agent"):
-        agent.handle("test", user="u", member="爸爸")
+        agent.handle("test", user="u", member="爸爸").text
     assert "模型=glm-5.3-flash" in caplog.text
 
 
@@ -231,8 +231,8 @@ def test_tool_results_persist_across_turns(monkeypatch):
         return next(replies)
 
     monkeypatch.setattr(agent, "_call_llm", fake_llm)
-    agent.handle("帮我填表", user="u", member="Jim")
-    agent.handle("对", user="u", member="Jim")
+    agent.handle("帮我填表", user="u", member="Jim").text
+    agent.handle("对", user="u", member="Jim").text
 
     h = agent.history["u"]
     assert any(m["role"] == "assistant" and m.get("tool_calls") for m in h)
@@ -256,7 +256,7 @@ def test_huge_tool_result_truncated_in_history(monkeypatch):
         {"content": "好"},
     ])
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
-    agent.handle("扫描", user="u", member="Jim")
+    agent.handle("扫描", user="u", member="Jim").text
     tool_msgs = [m for m in agent.history["u"] if m["role"] == "tool"]
     assert len(tool_msgs) == 1
     assert len(tool_msgs[0]["content"]) <= agent_core._budget.HIST_TOOL_CAP + 20
@@ -286,7 +286,7 @@ def _tool_loop_agent(monkeypatch, final):
 def test_tool_round_cap_gets_summary_reply(monkeypatch):
     """轮数用完仍在调工具：补一次收尾调用，回复用户已完成/剩余，不再是"生成回复失败"。"""
     agent, ran, calls = _tool_loop_agent(monkeypatch, {"content": "已处理 9 张，剩 16 张，回复继续"})
-    out = agent.handle("OCR 全部账单", user="u", member="Jim")
+    out = agent.handle("OCR 全部账单", user="u", member="Jim").text
     assert len(calls) == agent_core.TOOL_ROUNDS + 1
     assert len(ran) == agent_core.TOOL_ROUNDS
     assert "剩 16 张" in out and "生成回复失败" not in out
@@ -298,7 +298,7 @@ def test_tool_round_cap_summary_tool_calls_not_run(monkeypatch):
     """收尾调用仍返回 tool_calls：不执行，无文字则退回原兜底文案。"""
     agent, ran, _ = _tool_loop_agent(monkeypatch, {"content": "", "tool_calls": [
         {"id": "x", "function": {"name": "fake_ocr", "arguments": "{}"}}]})
-    out = agent.handle("OCR 全部账单", user="u", member="Jim")
+    out = agent.handle("OCR 全部账单", user="u", member="Jim").text
     assert len(ran) == agent_core.TOOL_ROUNDS
     assert "生成回复失败" in out
 
@@ -320,5 +320,5 @@ def test_model_sees_snake_case_params_and_cli_gets_kebab_flags(monkeypatch):
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
     seen = []
     monkeypatch.setattr(rt, "run_cli", lambda cmd, args=None: seen.append((cmd, args)) or "ok")
-    agent.handle("存了定期", user="u", member="爸爸")
+    agent.handle("存了定期", user="u", member="爸爸").text
     assert seen == [("deposit-add", {"amount": 1000, "start-date": "2026-01-01", "member": "爸爸"})]

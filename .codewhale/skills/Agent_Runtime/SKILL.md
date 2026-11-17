@@ -98,7 +98,7 @@ python .codewhale/skills/Agent_Runtime/telegram_bot.py --no-debug
 ## 新增频道
 
 加一个频道 = 继承 `transport_base.Transport`，实现三个 send_*，把 SDK 消息翻译成 `on_text` / `on_media`。
-闸门、节流刷新、来件落盘、哨兵拆分投递、异常兜底、到期提醒 / 懂王投递 / 备份节拍全在基类，不复制。
+闸门、节流刷新、来件落盘、回复投递（`Reply` 的图/文档/文字）、异常兜底、到期提醒 / 懂王投递 / 备份节拍全在基类，不复制。
 
 ```python
 # .codewhale/skills/Agent_Runtime/mychannel_bot.py

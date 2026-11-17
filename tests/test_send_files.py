@@ -51,20 +51,6 @@ def test_doc_file_unknown_id(tmp_path):
     assert _doc_cli(db, "doc-file", "--id", "999").returncode == 1
 
 
-# ── Task 2: 3-tuple split_reply + DOC sentinel ──────────────
-
-def test_split_reply_3tuple():
-    import agent_core as ac
-    r = ("hi\n" + ac.IMG_SENTINEL + "a.png\n" + ac.DOC_SENTINEL + "Family/x.pdf")
-    text, imgs, docs = ac.split_reply(r)
-    assert text == "hi" and imgs == ["a.png"] and docs == ["Family/x.pdf"]
-    # passthrough
-    assert ac.split_reply("plain") == ("plain", [], [])
-    # doc only
-    t, i, d = ac.split_reply(ac.DOC_SENTINEL + "p.pdf")
-    assert t == "" and i == [] and d == ["p.pdf"]
-
-
 # ── Task 3: send_file gate ──────────────────────────────────
 
 def test_resolve_sendable_gate(tmp_path, monkeypatch):

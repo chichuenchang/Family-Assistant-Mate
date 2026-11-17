@@ -11,8 +11,8 @@ Agent Core — 频道无关的全量上下文智能助手。
     LLM 自主选择工具 → 执行 → LLM 生成自然语言回复
 
 频道接入契约（详见 .codewhale/skills/Agent_Runtime/SKILL.md）:
-    agent.handle(text, user, member)        # 文字消息
-    agent.handle_media(paths, text, user, member)  # 图片/PDF + 随后文字
+    agent.handle(text, user, member)        # 文字消息 → Reply(text, images, docs)
+    agent.handle_media(paths, text, user, member)  # 图片/PDF + 随后文字 → Reply
     user = 频道内唯一 id（隔离各用户对话历史）
     member = members.resolve 解析出的成员名；为空直接返回空串（未注册来源不碰 LLM）
 
@@ -22,7 +22,7 @@ Agent Core — 频道无关的全量上下文智能助手。
 用法:
     from agent_core import Agent  # 同目录传输层直接 import
     agent = Agent()
-    reply = agent.handle("这个月花了多少", user="wx_xxx")
+    reply = agent.handle("这个月花了多少", user="wx_xxx", member="爸爸").text
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ import sys
 import time
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -187,9 +188,6 @@ def _build_system_prompt(idle_clear_hours: float | None = None) -> str:
 """
 
 
-IMG_SENTINEL = "\x01IMG:"
-DOC_SENTINEL = "\x01DOC:"
-
 # max_tokens 截断（finish_reason=length）
 TRUNCATED_REPLY_MARK = "（回复超出长度上限被截断）"
 TRUNCATED_TOOLS_NOTE = ("[系统] 你上一条输出超出长度上限被截断，其中的工具调用参数不完整，"
@@ -198,6 +196,14 @@ TRUNCATED_TOOLS_NOTE = ("[系统] 你上一条输出超出长度上限被截断�
 TOOL_ROUNDS = int((_CONFIG.get("agent") or {}).get("tool_rounds") or 30)
 TOOL_LIMIT_NOTE = ("[系统] 本轮工具调用次数已用完，不要再调用任何工具。请直接用已拿到的结果"
                    "回复用户：列出已完成的部分，说明还剩哪些没做，并提示用户回复“继续”接着处理。")
+
+@dataclass
+class Reply:
+    """Agent 给传输层的一次回复。images/docs = data 相对路径，传输层先发图、再发文档、最后发文字。"""
+    text: str = ""
+    images: list[str] = field(default_factory=list)
+    docs: list[str] = field(default_factory=list)
+
 
 CLEAR_COMMANDS = ("/clear", "清除上下文", "清空上下文", "清空记忆")
 
@@ -209,25 +215,6 @@ def is_clear_command(text: str) -> bool:
 def is_command(text: str) -> bool:
     """不经 LLM 的频道无关命令（/clear 类、/model、/effort）。传输层据此绕开攒着的来件。"""
     return is_clear_command(text) or _llm.parse_command(text.strip()) is not None
-
-
-def split_reply(reply: str) -> tuple[str, list[str], list[str]]:
-    """剥离 \\x01IMG:/\\x01DOC: 哨兵行，返回 (可见文本, [图片], [文档]) 三元组。"""
-    imgs, docs, keep = [], [], []
-    for line in (reply or "").split("\n"):
-        if line.startswith(IMG_SENTINEL):
-            p = line[len(IMG_SENTINEL):].strip()
-            if p:
-                imgs.append(p)
-        elif line.startswith(DOC_SENTINEL):
-            p = line[len(DOC_SENTINEL):].strip()
-            if p:
-                docs.append(p)
-        else:
-            keep.append(line)
-    return "\n".join(keep).strip(), imgs, docs
-
-
 
 
 # Agent 上下文管理旋钮（config.json "agent" 块；键缺失用默认值，显式 0 = 关闭该机制）
@@ -280,17 +267,17 @@ class Agent:
         self._llm_overrides: dict[str, dict] = _llm.load_overrides()
 
     def handle(self, text: str, user: str = "default", member: str = "", *,
-               said: str | None = None, media: Sequence[str] = ()) -> str:
+               said: str | None = None, media: Sequence[str] = ()) -> Reply:
         """said = 用户本人亲手打的字（确认闸门 __text 只认它）。text 可能掺了引用/OCR 等
         外部内容，传输层须另传 said；缺省 = text（本地 CLI 等无掺杂入口）。
         media = 本轮来件路径，只进对话存档（chat_archive）。"""
         said = text if said is None else said
         # 防御纵深：传输层闸门漏掉的未注册来源，这里二次拦截，不碰 LLM
         if not member:
-            return ""
+            return Reply()
         text = text.strip()
         if not text:
-            return "收到空消息。"
+            return Reply("收到空消息。")
         # 每条用户消息 = 一轮（/clear、/model 这类也算，中间插一条就断掉待确认草稿的链）
         turn_id = self._turn_seq.get(user, 0) + 1
         self._turn_seq[user] = turn_id
@@ -310,16 +297,16 @@ class Agent:
         # 频道无关命令：清除本用户对话上下文（不经 LLM，零 token）
         if is_clear_command(text):
             self.history.pop(user, None)
-            return "✅ 对话上下文已清除。"
+            return Reply("✅ 对话上下文已清除。")
 
         # 频道无关命令：/model /effort 运行时切换 LLM（不经 LLM，零 token）
         llm_reply = self._handle_llm_command(text, user)
         if llm_reply is not None:
-            return llm_reply
+            return Reply(llm_reply)
 
         missing = _llm.missing_key(self._llm_settings(user)[0])
         if missing:
-            return f"未配置 {missing}。"
+            return Reply(f"未配置 {missing}。")
 
         member_note = (f"\n\n## 当前对话成员\n{member} —— 写入类操作自动归到该成员名下；"
                        f"查询类工具可用 member 参数按成员过滤。")
@@ -352,7 +339,7 @@ class Agent:
             if message is None:
                 if tool_counts:
                     break   # 工具已生效：走收尾，照常进历史与存档
-                return "\n\n".join(["抱歉，暂时出错了。", *shown.values()])
+                return Reply("\n\n".join(["抱歉，暂时出错了。", *shown.values()]))
             cut, used = _pop_meta(message, tokens)   # used: 本次调用的顶替模型，无则空
             fallback = used or fallback
             # 思考链进 INFO 日志；键不 pop——DeepSeek 同轮工具调用须原样回传。
@@ -390,7 +377,7 @@ class Agent:
                 produced_images.extend(out.images)
                 produced_docs.extend(out.docs)
                 if out.shown:
-                    shown[name] = out.shown.replace("", "")   # 外部文本不得伪造哨兵行
+                    shown[name] = out.shown
                 # 回复里只按工具名计数（逐条列参数会刷屏）；明细进调试日志
                 tool_counts[name] = tool_counts.get(name, 0) + 1
                 msgs.append({"role": "tool", "tool_call_id": tc.get("id", ""),
@@ -432,18 +419,14 @@ class Agent:
         chat_archive.append(self.channel, user, said, hist_reply, media)
         if shown:
             final += "\n\n" + "\n\n".join(shown.values())
-        for p in produced_images:
-            final += f"\n{IMG_SENTINEL}{p}"
-        for p in produced_docs:
-            final += f"\n{DOC_SENTINEL}{p}"
-        return final
+        return Reply(final, produced_images, produced_docs)
 
     def handle_media(self, paths: list[str], text: str, user: str = "default",
-                     member: str = "", *, said: str | None = None) -> str:
+                     member: str = "", *, said: str | None = None) -> Reply:
         """图片/PDF + 随后文字指令 一并处理。传输层攒下来件，等用户发文字才调（来件本身不回复）。
         只给路径，工具 LLM 自选（见 Agent_Runtime/SKILL.md）。said 同 handle（缺省 = text）。"""
         if not member:
-            return ""
+            return Reply()
         parts = [f"材料{i}（{'PDF' if Path(p).suffix.lower() == '.pdf' else '图片'}）: {p}"
                  for i, p in enumerate(paths, 1)]
         routes = "\n".join(f"{i}) {r}" for i, r in enumerate(REGISTRY.image_routes, 1))
@@ -518,5 +501,5 @@ if __name__ == "__main__":
             break
         if msg.lower() in ("quit", "exit", "q"):
             break
-        print(agent.handle(msg, member="本地测试"))
+        print(agent.handle(msg, member="本地测试").text)
         print()

@@ -58,7 +58,7 @@ def _run_tool_turn(monkeypatch, tool: str, result: str):
     seen = []
     monkeypatch.setattr(agent, "_call_llm",
                         lambda msgs, user="": seen.append(list(msgs)) or next(replies))
-    agent.handle("看下这个链接", user="u", member="爸爸")
+    agent.handle("看下这个链接", user="u", member="爸爸").text
     return seen[1], agent.history["u"]
 
 

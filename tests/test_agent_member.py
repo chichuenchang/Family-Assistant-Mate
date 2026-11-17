@@ -35,13 +35,13 @@ def test_apply_member_keeps_llm_member_on_reads():
 
 def test_handle_returns_empty_without_member():
     agent = agent_core.Agent()
-    assert agent.handle("记账 午餐45", user="x") == ""
-    assert agent.handle("记账 午餐45", user="x", member="") == ""
+    assert agent.handle("记账 午餐45", user="x").text == ""
+    assert agent.handle("记账 午餐45", user="x", member="").text == ""
 
 
 def test_handle_media_returns_empty_without_member(tmp_path):
     agent = agent_core.Agent()
-    assert agent.handle_media([str(tmp_path / "x.jpg")], "记账", user="x", member="") == ""
+    assert agent.handle_media([str(tmp_path / "x.jpg")], "记账", user="x", member="").text == ""
 
 
 def test_system_prompt_includes_members_and_aliases(monkeypatch):
@@ -70,9 +70,9 @@ def test_handle_media_gives_paths_agent_picks_tools(monkeypatch):
     agent = agent_core.Agent()
     cap = {}
     monkeypatch.setattr(agent, "handle",
-                        lambda prompt, user="default", member="", said=None, media=(): cap.update(p=prompt, s=said) or "ok")
+                        lambda prompt, user="default", member="", said=None, media=(): cap.update(p=prompt, s=said) or agent_core.Reply("ok"))
     out = agent.handle_media(["data/Alex/inbox/2026-06/x.pdf", "data/Alex/inbox/2026-06/y.jpg"],
-                             "签好发给学校", user="u", member="Alex Lee")
+                             "签好发给学校", user="u", member="Alex Lee").text
     assert out == "ok"
     p = cap["p"]
     assert "材料1（PDF）: data/Alex/inbox/2026-06/x.pdf" in p and "材料2（图片）: data/Alex/inbox/2026-06/y.jpg" in p

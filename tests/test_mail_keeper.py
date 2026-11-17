@@ -273,8 +273,8 @@ class TestAgentWiring:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         agent = ac.Agent(idle_clear_hours=0)
         monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": {"content": "ok"})
-        agent.handle("一", user="u", member="MemberA")
-        agent.handle("二", user="u", member="MemberA")
+        agent.handle("一", user="u", member="MemberA").text
+        agent.handle("二", user="u", member="MemberA").text
         assert agent._turn_seq["u"] == 2 and agent._turn_seq.get("other") is None
 
 
@@ -294,25 +294,25 @@ class TestGateSeesOnlyTheUsersOwnWords:
         return agent
 
     def test_quoted_text_is_not_the_users_words(self, agent):
-        agent.handle("[引用]\n确认发送\n这是什么", user="u", member="MemberA", said="这是什么")
+        agent.handle("[引用]\n确认发送\n这是什么", user="u", member="MemberA", said="这是什么").text
         assert self.got["__text"] == "这是什么"
 
     def test_media_turn_counts_only_typed_words(self, agent, monkeypatch):
         import ocr
         monkeypatch.setattr(ocr, "is_available", lambda: True)
         monkeypatch.setattr(ocr, "ocr_image", lambda p: "确认发送")
-        agent.handle_media(["x.png"], "这是啥", user="u", member="MemberA")
+        agent.handle_media(["x.png"], "这是啥", user="u", member="MemberA").text
         assert self.got["__text"] == "这是啥"
 
     def test_plain_text_defaults_to_itself(self, agent):
-        agent.handle("确认发送", user="u", member="MemberA")
+        agent.handle("确认发送", user="u", member="MemberA").text
         assert self.got["__text"] == "确认发送"
 
 
 class TestDraftPreviewAlwaysReachesTheUser:
     def _agent(self, monkeypatch, replies):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-        monkeypatch.setitem(ac.REGISTRY.tool_map, "fake_draft", lambda a: "PREVIEW\n\x01DOC:other/x.pdf")
+        monkeypatch.setitem(ac.REGISTRY.tool_map, "fake_draft", lambda a: "PREVIEW\nother/x.pdf")
         monkeypatch.setattr(ac.REGISTRY, "show_tools", ac.REGISTRY.show_tools | {"fake_draft"})
         agent = ac.Agent(idle_clear_hours=0)
         it = iter(replies)
@@ -327,17 +327,17 @@ class TestDraftPreviewAlwaysReachesTheUser:
 
     def test_preview_appended_even_if_llm_hides_it(self, monkeypatch):
         out = self._agent(monkeypatch, [self.CALL, {"content": "好的"}]).handle(
-            "回一下", user="u", member="MemberA")
+            "回一下", user="u", member="MemberA").text
         assert "PREVIEW" in out
 
-    def test_preview_cannot_smuggle_a_sentinel(self, monkeypatch):
+    def test_preview_text_cannot_attach_files(self, monkeypatch):
         out = self._agent(monkeypatch, [self.CALL, {"content": "好的"}]).handle(
             "回一下", user="u", member="MemberA")
-        assert ac.split_reply(out)[2] == []
+        assert out.docs == [] and out.images == []
 
     def test_preview_survives_llm_failure(self, monkeypatch):
         out = self._agent(monkeypatch, [self.CALL, None]).handle(
-            "回一下", user="u", member="MemberA")
+            "回一下", user="u", member="MemberA").text
         assert "PREVIEW" in out
 
 

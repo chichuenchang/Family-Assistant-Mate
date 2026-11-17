@@ -238,11 +238,6 @@ class TelegramTransport(Transport):
 _TRANSPORT = TelegramTransport()
 
 
-def _send_reply(chat_id, reply: str) -> None:
-    """拆出图片/文档哨兵：先发图，再发文档，最后发文字（transport_base.deliver）。"""
-    _TRANSPORT.deliver(chat_id, reply)
-
-
 # ── 主循环 ──────────────────────────────────────────────────
 
 def handle_updates(t: Transport, updates: list[dict], offset: int,

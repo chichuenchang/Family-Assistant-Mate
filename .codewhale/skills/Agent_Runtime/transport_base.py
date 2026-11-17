@@ -2,7 +2,7 @@
 
 子类只做三件事：实现 send_text / send_photo / send_document，把 SDK 收到的消息
 翻译成 on_text / on_media 调用，以及决定后台节拍怎么跑（轮询循环内调 background_tick，
-或 start_background_threads 起守护线程）。闸门、来图落盘、来件攒到下条文字、哨兵拆分投递、异常兜底在这里，
+或 start_background_threads 起守护线程）。闸门、来图落盘、来件攒到下条文字、回复投递、异常兜底在这里，
 各频道零复制。节拍钩子来自各 skill manifest（MESSAGE_TICKS / SLOW_TICKS / FAST_TICKS，
 契约见 skill_registry.py）；本模块不 import 任何 skill。
 
@@ -22,7 +22,7 @@ from pathlib import Path
 import backup_hook
 import paths as _paths
 import tool_runtime as rt
-from agent_core import Agent, REGISTRY, is_clear_command, is_command, split_reply
+from agent_core import Agent, REGISTRY, Reply, is_clear_command, is_command
 from members import resolve
 from skill_registry import run_ticks
 
@@ -37,7 +37,7 @@ def with_quote(text: str, quoted) -> str:
 
 
 def sendable(rel: str) -> Path | None:
-    """哨兵路径闸门：须存在且在 data_root 内；否则 None。"""
+    """回复附带文件的路径闸门：须存在且在 data_root 内；否则 None。"""
     try:
         root = _paths.data_root().resolve()
         ap = _paths.resolve_rel(rel).resolve()
@@ -123,7 +123,7 @@ class Transport:
                 reply = self.agent.handle_media(media, body, user=key, member=member, said=text)
             else:
                 reply = self.agent.handle(body, user=key, member=member, said=text)
-            log.debug("文字回复 → %s", (reply or "")[:200])
+            log.debug("文字回复 → %s", reply.text[:200])
             self.deliver(target, reply)
         except Exception as e:
             log.exception("文字处理出错")
@@ -164,17 +164,17 @@ class Transport:
             self._pending.setdefault(str(user), []).append((str(path), time.time()))
 
     # ── 投递 ────────────────────────────────────────────────
-    def deliver(self, target, reply: str) -> None:
-        """拆哨兵：先发图，再发文档，最后发文字。单件失败仅记录，不影响其余。"""
-        text, imgs, docs = split_reply(reply or "")
-        for rel in imgs:
+    def deliver(self, target, reply: Reply) -> None:
+        """先发图，再发文档，最后发文字。单件失败仅记录，不影响其余。"""
+        text = reply.text
+        for rel in reply.images:
             ap = sendable(rel)
             if ap:
                 try:
                     self.send_photo(target, str(ap))
                 except Exception:
                     log.exception("发送图片失败（跳过）: %s", rel)
-        for rel in docs:
+        for rel in reply.docs:
             ap = sendable(rel)
             if ap:
                 try:

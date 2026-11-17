@@ -358,7 +358,7 @@ class TestAgentRegistration:
         for c in cmds:
             assert agent_core.rt.cli_path(c).parent.name == "Note_Keeper"
 
-    def test_apply_member_forces_member_on_note_tools(self):
+    def test_arguments_member_forces_member_on_note_tools(self):
         import agent_core
         out = agent_core.REGISTRY.arguments("search_notes", {"member": "妈妈", "keyword": "x"}, agent_core.Caller(member="爸爸"))
         assert out["member"] == "爸爸"

@@ -23,7 +23,7 @@ def _capture(monkeypatch):
     return calls
 
 
-def test_send_reply_dispatches_image_then_doc_then_text(tmp_path, monkeypatch):
+def test_deliver_dispatches_image_then_doc_then_text(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     img_rel, doc_rel = _seed(tmp_path)
     calls = _capture(monkeypatch)
@@ -34,7 +34,7 @@ def test_send_reply_dispatches_image_then_doc_then_text(tmp_path, monkeypatch):
     assert calls[2][1] == "看图说明"
 
 
-def test_send_reply_drops_missing_and_escaping_paths(tmp_path, monkeypatch):
+def test_deliver_drops_missing_and_escaping_paths(tmp_path, monkeypatch):
     # 不存在的图（存在性闸门）+ 逃逸 data_root 的文档（根闸门）→ 都不发，文字照发。
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     calls = _capture(monkeypatch)
@@ -43,7 +43,7 @@ def test_send_reply_drops_missing_and_escaping_paths(tmp_path, monkeypatch):
     assert calls == [("text", "hi")]
 
 
-def test_send_reply_text_only_when_no_files(tmp_path, monkeypatch):
+def test_deliver_text_only_when_no_files(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     calls = _capture(monkeypatch)
     telegram_bot._TRANSPORT.deliver(123, agent_core.Reply("纯文字回复"))

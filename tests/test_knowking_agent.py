@@ -45,7 +45,7 @@ class TestChannel:
 
 
 class TestContextInjection:
-    def test_apply_context_injects_channel_user_member_for_knowking(self):
+    def test_arguments_context_injects_channel_user_member_for_knowking(self):
         out = ac.REGISTRY.arguments("knowking", {"topic": "X"},
                                     ac.Caller(channel="telegram", user="555", member="Jim"))
         assert out["__channel"] == "telegram"
@@ -53,7 +53,7 @@ class TestContextInjection:
         assert out["member"] == "Jim"
         assert out["topic"] == "X"
 
-    def test_apply_context_noop_for_other_tools(self):
+    def test_arguments_context_noop_for_other_tools(self):
         out = ac.REGISTRY.arguments("web_search", {"query": "X"},
                                     ac.Caller(channel="telegram", user="555", member="Jim"))
         assert "__channel" not in out and "__user" not in out

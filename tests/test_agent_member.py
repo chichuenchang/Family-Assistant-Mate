@@ -3,24 +3,24 @@ import pytest
 import agent_core
 
 
-def test_apply_member_forces_resolved_member_on_writes():
+def test_arguments_member_forces_resolved_member_on_writes():
     out = agent_core.REGISTRY.arguments("add_transaction",
                                    {"member": "妈妈", "amount": 5}, agent_core.Caller(member="爸爸"))
     assert out["member"] == "爸爸"
 
 
-def test_apply_member_strips_llm_member_when_no_resolved_member():
+def test_arguments_member_strips_llm_member_when_no_resolved_member():
     out = agent_core.REGISTRY.arguments("add_transaction", {"member": "妈妈"}, agent_core.Caller(member=""))
     assert "member" not in out
 
 
-def test_apply_member_covers_all_write_tools():
+def test_arguments_member_covers_all_write_tools():
     for tool in ("add_transaction", "add_deposit", "add_transfer", "add_tax"):
         out = agent_core.REGISTRY.arguments(tool, {}, agent_core.Caller(member="爸爸"))
         assert out["member"] == "爸爸", tool
 
 
-def test_apply_member_forces_sheet_and_send_tools():
+def test_arguments_member_forces_sheet_and_send_tools():
     # 工作表 + 发文档/文件按成员私有：强制注入发送者，剥离 LLM 冒名 member。
     for tool in ("create_worksheet", "show_worksheet", "edit_worksheet",
                  "visualize_data", "send_document", "send_file"):
@@ -28,7 +28,7 @@ def test_apply_member_forces_sheet_and_send_tools():
         assert out["member"] == "爸爸", tool
 
 
-def test_apply_member_keeps_llm_member_on_reads():
+def test_arguments_member_keeps_llm_member_on_reads():
     out = agent_core.REGISTRY.arguments("list_transactions", {"member": "妈妈"}, agent_core.Caller(member="爸爸"))
     assert out["member"] == "妈妈"
 

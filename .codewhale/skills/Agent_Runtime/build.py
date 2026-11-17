@@ -103,11 +103,33 @@ def _unlink_junctions(d: Path) -> None:
 
 
 def remove_snapshot(path: Path) -> bool:
-    """Delete snapshot. Junctions unlinked first: rmtree never walks into live data."""
-    if path.is_dir():
+    """Delete snapshot; False = in use (untouched) or delete blocked (left as .del).
+    Rename probe: measured WinError 32 while a process has cwd in the dir (daemon:
+    run-daemon sets cwd = snapshot; CLIs inherit). rmtree alone would empty it first.
+    .del name never matches STAMP_RE: half-deleted dir never picked by latest().
+    Junctions unlinked before rmtree: never walks into live data."""
+    if not path.is_dir():
+        return True
+    if not path.name.endswith(".del"):
+        try:
+            path = path.rename(path.with_name(path.name + ".del"))
+        except OSError:
+            return False
+    try:
         _unlink_junctions(path)
         shutil.rmtree(path)
+    except OSError:
+        return False
     return True
+
+
+def prune(builds: Path, keep: int = 5) -> list[str]:
+    """Drop all but newest `keep` builds + crashed .tmp / leftover .del. Returns skipped."""
+    if not builds.is_dir():
+        return []
+    stamps = sorted(p for p in builds.iterdir() if STAMP_RE.match(p.name))
+    junk = [p for p in builds.iterdir() if p.suffix in (".tmp", ".del")]
+    return [p.name for p in stamps[:-keep] + junk if not remove_snapshot(p)]
 
 
 def make_snapshot(root: Path, builds: Path, stamp: str) -> Path:
@@ -166,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"BUILD FAILED: {e}")
         return 1
     print(f"built {snap.name} ({state['commit']}{' dirty' if state['dirty'] else ''}) -> {snap}")
+    for name in prune(builds):
+        print(f"skipped {name} (in use)")
     return 0
 
 

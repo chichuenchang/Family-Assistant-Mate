@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -154,3 +155,61 @@ def test_main_builds_and_warns_dirty(repo, builds, monkeypatch, capsys):
     assert build.latest(builds) is not None
     assert build.main(["--latest"]) == 0
     assert str(build.latest(builds)) in capsys.readouterr().out
+
+
+# ── Task 3: safe removal / prune ───────────────────────────
+
+def test_remove_keeps_live_data(repo, builds):
+    snap = build.make_snapshot(repo, builds, STAMP)
+    assert build.remove_snapshot(snap) is True
+    assert not snap.exists() and not snap.with_name(snap.name + ".del").exists()
+    assert (repo / "data" / "f.txt").read_text() == "live"
+
+
+def _hold(snap: Path) -> subprocess.Popen:
+    """Stand-in daemon: cwd in snapshot. Waits for 'ready' — child opens its cwd only
+    after Popen returns; racing it lets the rename through (measured)."""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "print('ready', flush=True); import time; time.sleep(30)"],
+        cwd=snap, stdout=subprocess.PIPE, text=True)
+    assert proc.stdout.readline().strip() == "ready"
+    return proc
+
+
+def test_remove_skips_in_use(repo, builds):
+    snap = build.make_snapshot(repo, builds, STAMP)
+    proc = _hold(snap)
+    try:
+        assert build.remove_snapshot(snap) is False
+        assert (snap / "BUILD.json").is_file()
+        assert (snap / ".codewhale/skills/X/cli.py").is_file()
+        assert build.latest(builds) == snap
+    finally:
+        proc.kill()
+        proc.wait()
+
+
+def test_prune_keeps_newest_five(repo, builds):
+    stamps = [f"20990101-12000{i}" for i in range(7)]
+    for s in stamps:
+        build.make_snapshot(repo, builds, s)
+    crashed = builds / "20990101-130000.tmp"
+    crashed.mkdir()
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(crashed / "data"), str(repo / "data")],
+                   check=True, capture_output=True)
+    assert build.prune(builds) == []
+    assert sorted(p.name for p in builds.iterdir()) == stamps[2:]
+    assert (repo / "data" / "f.txt").read_text() == "live"
+
+
+def test_prune_reports_in_use(repo, builds):
+    stamps = [f"20990101-12000{i}" for i in range(6)]
+    for s in stamps:
+        build.make_snapshot(repo, builds, s)
+    proc = _hold(builds / stamps[0])
+    try:
+        assert build.prune(builds) == [stamps[0]]
+        assert (builds / stamps[0] / "BUILD.json").is_file()
+    finally:
+        proc.kill()
+        proc.wait()

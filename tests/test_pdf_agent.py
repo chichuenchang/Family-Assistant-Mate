@@ -48,6 +48,45 @@ def test_doc_tool_outcome_takes_first_line_only(monkeypatch):
     assert out.docs == ["jim/pdf_edits/x/form_edited.pdf"]
 
 
+def test_doc_tool_preview_lines_become_images(monkeypatch):
+    reg = agent_core.REGISTRY
+    monkeypatch.setitem(reg.tool_map, "edit_pdf",
+                        lambda a: "a/x.pdf\n预览: a/p.png\nsession=1")
+    out = reg.call("edit_pdf", {}, agent_core.Caller(member="Jim"))
+    assert out.docs == ["a/x.pdf"]
+    assert out.images == ["a/p.png"]
+
+
+def test_create_pdf_registered():
+    reg = agent_core.REGISTRY
+    names = {t["function"]["name"] for t in reg.schemas}
+    assert "create_pdf" in names and "create_pdf" in reg.tool_map
+    assert {"create_pdf"} <= reg.doc_tools & reg.member_locked & reg.untrusted_tools
+    assert "pdf-create" in agent_core.rt.ALLOWED
+    assert agent_core.rt.cli_path("pdf-create").parent.name == "PDF_Editor"
+    assert agent_core.rt.CLI_TIMEOUTS["pdf-create"] >= 90
+    assert "create_pdf" in agent_core._build_system_prompt()
+
+
+def test_create_pdf_passes_html_by_file(monkeypatch):
+    from pathlib import Path
+    big = "<p>" + "字" * 40000 + "</p>"
+    seen = {}
+
+    def fake_run_cli(cmd, args):
+        p = Path(args["html-file"])
+        seen.update(cmd=cmd, args=dict(args), path=p, content=p.read_text(encoding="utf-8"))
+        return "jim/pdf_creates/x/document.pdf\n预览: jim/pdf_creates/x/preview.png"
+    monkeypatch.setattr(agent_core.rt, "run_cli", fake_run_cli)
+    out = agent_core.REGISTRY.call("create_pdf", {"html": big, "title": "T", "member": "X"},
+                                   agent_core.Caller(member="Jim"))
+    assert seen["cmd"] == "pdf-create" and "html" not in seen["args"]
+    assert seen["content"] == big and seen["args"]["member"] == "Jim" and seen["args"]["title"] == "T"
+    assert not seen["path"].exists()
+    assert out.docs == ["jim/pdf_creates/x/document.pdf"]
+    assert out.images == ["jim/pdf_creates/x/preview.png"]
+
+
 def test_system_prompt_describes_one_shot_workflow():
     p = agent_core._build_system_prompt()
     assert "edit_pdf" in p and "inspect_pdf" in p

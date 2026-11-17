@@ -95,3 +95,8 @@ def test_member_cache_dir_adopts_legacy_dir(env):
 def test_member_pdf_edits_dir_created(env):
     d = paths.member_pdf_edits_dir("Alex Lee")
     assert d.is_dir() and d.as_posix().endswith("data/Alex/pdf_edits")
+
+
+def test_member_pdf_creates_dir_created(env):
+    d = paths.member_pdf_creates_dir("Alex Lee")
+    assert d.is_dir() and d.as_posix().endswith("data/Alex/pdf_creates")

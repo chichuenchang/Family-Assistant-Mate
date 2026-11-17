@@ -339,3 +339,74 @@ def test_stale_layout_cache_without_targets_is_rebuilt(cli, capsys, inbox, monke
     assert seen[1]["history"] == ["GIVEN NAME 填 Jichun"]          # 续改带上原话
     assert "targets" in pdf_plan.load_layout(plan)
     assert "Jichun" in page_texts(Path(cli._paths.resolve_rel(out.splitlines()[0])))[0]
+
+
+# ── pdf-create（浏览器打桩：渲染 = 写一页样例 PDF） ──────────
+
+@pytest.fixture
+def browser(monkeypatch):
+    import pdf_create
+    seen = []
+
+    def fake_render(html, out_pdf, browser, timeout=60):
+        seen.append(html)
+        build_digital_pdf(out_pdf)
+    monkeypatch.setattr(pdf_create, "find_browser", lambda configured="": "b.exe")
+    monkeypatch.setattr(pdf_create, "render", fake_render)
+    return seen
+
+
+def _create(cli, capsys, tmp_path, html, *extra):
+    f = tmp_path / "in.html"
+    f.write_text(html, encoding="utf-8")
+    return _run(cli, capsys, "pdf-create", "--html-file", str(f), "--member", "jim", *extra)
+
+
+def test_create_prints_contract(cli, capsys, tmp_path, data_root, browser):
+    code, out, _ = _create(cli, capsys, tmp_path, "<h1>Sale</h1>", "--title", "Flyer")
+    assert code == 0
+    lines = out.splitlines()
+    sid = _sid(out)
+    d = data_root / "jim" / "pdf_creates" / sid
+    assert lines[0] == f"jim/pdf_creates/{sid}/Flyer.pdf"
+    assert lines[1] == f"预览: jim/pdf_creates/{sid}/preview.png"
+    assert (d / "Flyer.pdf").is_file() and (d / "preview.png").is_file()
+    assert (d / "source.html").read_text(encoding="utf-8") == "<h1>Sale</h1>"
+    assert "Content-Security-Policy" in browser[0]
+
+
+def test_create_revise_same_session_overwrites(cli, capsys, tmp_path, data_root, browser):
+    _, out, _ = _create(cli, capsys, tmp_path, "<h1>v1</h1>", "--title", "Flyer")
+    sid = _sid(out)
+    code, out2, _ = _create(cli, capsys, tmp_path, "<h1>v2</h1>", "--session", sid)
+    d = data_root / "jim" / "pdf_creates" / sid
+    assert code == 0 and _sid(out2) == sid
+    assert out2.splitlines()[0] == f"jim/pdf_creates/{sid}/Flyer.pdf"      # 标题沿用
+    assert (d / "source.html").read_text(encoding="utf-8") == "<h1>v2</h1>"
+    _create(cli, capsys, tmp_path, "<h1>v3</h1>", "--session", sid, "--title", "Final")
+    assert (d / "Final.pdf").is_file() and not (d / "Flyer.pdf").exists()
+
+
+def test_create_unknown_session_starts_new_with_notice(cli, capsys, tmp_path, browser):
+    code, out, _ = _create(cli, capsys, tmp_path, "<p>x</p>", "--session", "20200101_000000_abcd")
+    assert code == 0 and _sid(out) != "20200101_000000_abcd"
+    assert any(l.startswith("提示:") for l in out.splitlines())
+
+
+def test_create_no_browser_errors(cli, capsys, tmp_path, monkeypatch):
+    import pdf_create
+    monkeypatch.setattr(pdf_create, "find_browser", lambda configured="": None)
+    code, out, _ = _create(cli, capsys, tmp_path, "<p>x</p>")
+    assert code == 1 and "找不到 Edge/Chrome" in out and "pdf.browser" in out
+
+
+def test_create_inlines_member_image_and_warns_on_foreign(cli, capsys, tmp_path, inbox,
+                                                         data_root, browser):
+    build_png(inbox / "logo.png")
+    other = data_root / "wenliang" / "inbox"
+    other.mkdir(parents=True)
+    build_png(other / "x.png")
+    html = '<img src="jim/inbox/2026-09/logo.png"><img src="wenliang/inbox/x.png">'
+    code, out, _ = _create(cli, capsys, tmp_path, html)
+    assert code == 0 and browser[0].count("data:image/png;base64,") == 1
+    assert any(l.startswith("警告:") and "wenliang" in l for l in out.splitlines())

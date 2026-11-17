@@ -11,7 +11,7 @@ manifest 是普通模块，模块级属性即契约（全部可选，缺省为�
     CONTEXT_TOOLS   set   注入 __channel/__user（异步回推）
     UNTRUSTED_TOOLS set   结果含非本地来源文本（网页/OCR/远程日历）→ 套 tool_runtime.fence 才进 LLM
     IMAGE_TOOLS     set   成功返回 = 图片相对路径，每行一张（传输层发图）
-    DOC_TOOLS       set   成功返回首行 = 文件相对路径（传输层发文件）
+    DOC_TOOLS       set   成功返回首行 = 文件相对路径（传输层发文件）；"预览: <路径>" 行 = 附图
     SHOW_TOOLS      set   成功返回原文由代码附在回复末尾（用户必看到，LLM 藏不了/改不了）
     PROMPT_SECTIONS list[str]  system prompt 独立段落（"## 标题" 开头）
     PROMPT_RULES    list[str]  并入 "## 行为准则" 的条目（不带 "- "）
@@ -40,6 +40,7 @@ import tool_runtime as rt
 log = logging.getLogger("fam.agent")
 MANIFEST_NAME = "agent_tools.py"
 ERROR_PREFIX = "[错误]"     # 工具返回以此开头 = 失败（各 skill 统一约定）
+PREVIEW_PREFIX = "预览:"    # DOC_TOOLS 结果里的附图行
 
 
 @dataclass(frozen=True)
@@ -124,8 +125,11 @@ class Registry:
             # 每行一张（fetch_images 多张）；按行不按空白拆——路径可含空格
             out.images = [ln.strip() for ln in result.splitlines() if ln.strip()]
         elif name in self.doc_tools:
-            # pdf-edit 第一行是路径，后续可能有"警告:"行——只取首行
-            out.docs = [result.strip().splitlines()[0]]
+            # 首行是路径，后续可能有"警告:"行——只取首行；"预览:"行另作图发
+            lines = result.strip().splitlines()
+            out.docs = [lines[0]]
+            out.images = [ln.removeprefix(PREVIEW_PREFIX).strip() for ln in lines[1:]
+                          if ln.startswith(PREVIEW_PREFIX)]
         if name in self.show_tools:
             out.shown = result
         return out

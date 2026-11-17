@@ -6,6 +6,7 @@ FAM — 磁盘布局解析（数据落盘位置的单一事实来源）
     data/<成员目录>/notes/notes.db         成员备忘 + notes/YYYY-MM/ 图片，私有
     data/<成员目录>/inbox/YYYY-MM/          来图（按发送成员归属；日程/待办来图常驻此处，1 年后清）
     data/<成员目录>/pdf_edits/<id>/         PDF 编辑会话（plan/layout/产出），私有
+    data/<成员目录>/pdf_creates/<id>/       从零生成 PDF 会话（source.html/产出/预览），私有
     data/<成员目录>/cache/<名>/             可再生产物（charts / web_images），不入备份
     data/Family/ledger.db                   家庭账本（收支/定期/划转/报税/汇率，纯财务）
     data/Family/documents.db                家庭文档库（documents + profiles，家庭共享）
@@ -135,6 +136,13 @@ def member_inbox_dir(member: str, dt: date | None = None) -> Path:
 def member_pdf_edits_dir(member: str) -> Path:
     """PDF 编辑会话 data/<成员>/pdf_edits/，不存在则创建。"""
     d = member_dir(member) / "pdf_edits"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def member_pdf_creates_dir(member: str) -> Path:
+    """从零生成 PDF 的会话 data/<成员>/pdf_creates/，不存在则创建。"""
+    d = member_dir(member) / "pdf_creates"
     d.mkdir(parents=True, exist_ok=True)
     return d
 

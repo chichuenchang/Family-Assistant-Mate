@@ -13,7 +13,7 @@
 | **OCR** | 图片文字识别、票据结构化提取 | [SKILL.md](.codewhale/skills/OCR/SKILL.md) | 图片文字识别、票据结构化提取 |
 | **Vision** | 识图模型看图答问（物体/场景/手写/图表），与主模型解耦 | [SKILL.md](.codewhale/skills/Vision/SKILL.md) | 看图、图里是什么、识别物体 |
 | **Document Keeper** | 家庭文档归档、OCR 索引、到期跟踪与每日提醒、家庭成员资料（profiles，家庭共享） | [SKILL.md](.codewhale/skills/Document_Keeper/SKILL.md) | 文档、合同、租约、保险单、证件、到期、提醒 |
-| **PDF Editor** | 一句指令改 PDF：填表单（原生字段）、任意位置写字/打勾、白底覆盖改写、贴签名、画线、删页/旋转/重排/合并；会话落盘可续改（pypdf / reportlab / pypdfium2 可选依赖，缺席优雅降级） | [SKILL.md](.codewhale/skills/PDF_Editor/SKILL.md) | 填表、改 PDF、签名、删页、合并 PDF、移民表格 |
+| **PDF Editor** | 一句指令改 PDF：填表单（原生字段）、任意位置写字/打勾、白底覆盖改写、贴签名、画线、删页/旋转/重排/合并；从零做新 PDF（Agent 写 HTML，无头 Edge/Chrome 打印，附首页预览图）；会话落盘可续改（pypdf / reportlab / pypdfium2 可选依赖，缺席优雅降级） | [SKILL.md](.codewhale/skills/PDF_Editor/SKILL.md) | 填表、改 PDF、签名、删页、合并 PDF、移民表格、做传单、写合同出 PDF |
 | **Note Keeper** | 个人备忘（杂项信息长期记忆，按成员私有，支持图片 OCR 入忘、置顶常驻上下文） | [SKILL.md](.codewhale/skills/Note_Keeper/SKILL.md) | 记一下、帮我记住、备忘、我记过什么 |
 | **Calendar Keeper** | 按成员私有的日程与待办，直连各成员远程日历，无本地库（作者已实现 Google Calendar + Tasks provider，按成员/域选择，可按契约换） | [SKILL.md](.codewhale/skills/Calendar_Keeper/SKILL.md) | 日程、安排、活动、待办、任务、日历 |
 | **Mail Keeper** | 按成员私有的邮箱：查收/读全文/回信/发新信，可带附件（发信须用户下一条消息确认才发出，闸门在代码里；回信收件人由原信决定），可选新邮件播报（AI 判需处理才报，发件人+主题+一行理由；说"这种别推"/"漏推了"即学会 mute/always 该类）；建 Gmail 过滤器把某类信分到别的标签（同样两轮确认）；当前 Gmail provider，可按契约换 | [SKILL.md](.codewhale/skills/Mail_Keeper/SKILL.md) | 邮件、邮箱、Gmail、回邮件、查收邮件 |
@@ -75,6 +75,7 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 | `backup`（enabled/debounce_seconds） | `Remote_Backup/backup_sync.py`（CFG，读一次）。每成员 provider/cred_prefix/remote_root/scopes 在 `data/members.json` 的 backup 块 |
 | `calendar`（enabled/lookahead_days/image_retention_years/image_prune_interval_days） | `Calendar_Keeper/remote_schedule.py`（CFG）；`image_gc.py`（来图清理）；`agent_tools.py`/`cli.py`（lookahead_days 默认窗口）。按成员接入在 `data/members.json` 的 sync 块 |
 | `notes`（chart_retention_days/worksheet_pin_row_cap） | `Note_Keeper/cli.py`（chart_retention_days，prune-on-render）；`Note_Keeper/agent_tools.py`（WORKSHEET_PIN_ROW_CAP，置顶 table 工作表注入行上限） |
+| `pdf`（browser） | `PDF_Editor/cli.py`（pdf-create 找浏览器；空 = 自动探测） |
 | `agent`（context_max_tokens/idle_clear_hours/tool_rounds） | `agent_core`（单条消息工具往返上限；上下文自动管理：历史 token 预算超出→从最旧一问一答成对丢弃；用户闲置超 N 小时→下一条消息前清空其历史；0=关闭。用户也可发 /clear 手动清空） |
 | ~~`members`~~（已迁出 → `data/members.json`，git 不跟踪） | `Agent_Runtime/members.py`（resolve / member-* 读写均走该文件） |
 | `wechat.allowed_commands` | `Expense_Tracker/agent_tools.py`（AGENT_COMMANDS；其余 skill 的命令由各自 manifest 恒定放行） |

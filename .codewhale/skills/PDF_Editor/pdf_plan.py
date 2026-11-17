@@ -36,15 +36,25 @@ _now = datetime.now
 
 # ── 会话存储 ─────────────────────────────────────────────────
 
-def session_dir(member: str, session_id: str) -> Path:
+def new_session_id(now: datetime | None = None) -> str:
+    """会话 id（pdf_edits 与 pdf_create 共用）。"""
+    return (now or _now()).strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4]
+
+
+def check_session_id(session_id: str) -> str:
+    """LLM 给的 id 要拼进路径：不合格式 → ValueError（防 ../ 越界）。"""
     if not _ID_RE.fullmatch(session_id or ""):
         raise ValueError(f"非法会话 id: {session_id}")
-    return _paths.member_pdf_edits_dir(member) / session_id
+    return session_id
+
+
+def session_dir(member: str, session_id: str) -> Path:
+    return _paths.member_pdf_edits_dir(member) / check_session_id(session_id)
 
 
 def new_session(member: str, source_pdf: str, layout: dict) -> dict:
     now = _now()
-    plan = {"id": now.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4],
+    plan = {"id": new_session_id(now),
             "member": member, "created": now.isoformat(timespec="seconds"),
             "source_pdf": source_pdf, "kind": layout["kind"], "pages": layout["pages"],
             "ops": [], "history": [], "out": None}

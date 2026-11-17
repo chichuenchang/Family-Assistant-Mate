@@ -48,6 +48,14 @@ def test_set_key_replaces_in_place(tmp_path):
     assert f.read_text(encoding="utf-8") == "# head\nA=1\nFAM_T_X=new\nB=2\n"
 
 
+def test_set_key_drops_duplicate_lines(tmp_path):
+    f = tmp_path / ".env"
+    f.write_text("FAM_T_X=a\nB=2\nFAM_T_X = \"b\"\n", encoding="utf-8")
+    project_env.set_key("FAM_T_X", "new", f)
+    assert f.read_text(encoding="utf-8") == "FAM_T_X=new\nB=2\n"
+    assert project_env.load(f) and os.environ["FAM_T_X"] == "new"
+
+
 def test_env_path_override(tmp_path, monkeypatch):
     monkeypatch.setenv(project_env.ENV_FILE_VAR, str(tmp_path / "x.env"))
     assert project_env.env_path() == tmp_path / "x.env"

@@ -57,16 +57,20 @@ def load(path: Path | None = None) -> list[str]:
 
 
 def set_key(name: str, value: str, path: Path | None = None) -> Path:
-    """upsert 一行：已有键原位替换（保留注释与顺序），否则追加。原子写；同步 os.environ。"""
+    """upsert 一行：首个同名行原位替换（保留注释与顺序），其余同名行删（parse 后者胜，留着会遮新值）；
+    无则追加。原子写；同步 os.environ。"""
     path = path or env_path()
-    lines = _read(path).splitlines()
     new = f"{name}={value}"
-    for i, line in enumerate(lines):
+    lines: list[str] = []
+    placed = False
+    for line in _read(path).splitlines():
         kv = _split(line)
         if kv and kv[0] == name:
-            lines[i] = new
-            break
-    else:
+            if placed:
+                continue
+            line, placed = new, True
+        lines.append(line)
+    if not placed:
         lines.append(new)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")

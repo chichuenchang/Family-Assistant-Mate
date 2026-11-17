@@ -21,7 +21,7 @@ def wrapped(monkeypatch):
 @pytest.mark.parametrize("resp", [{"ret": -2}, {"errcode": 40001}])
 def test_failure_logs_warning(wrapped, caplog, resp):
     wrapped["resp"] = resp
-    with caplog.at_level(logging.WARNING, logger="familyassist.wechat"):
+    with caplog.at_level(logging.WARNING, logger="fam.wechat"):
         assert api.send_message(None, MSG) is resp
     assert "sendmessage 失败 to=u1" in caplog.text
 
@@ -29,7 +29,7 @@ def test_failure_logs_warning(wrapped, caplog, resp):
 @pytest.mark.parametrize("resp", [{}, {"ret": 0, "errcode": 0}])
 def test_success_no_warning(wrapped, caplog, resp):
     wrapped["resp"] = resp
-    with caplog.at_level(logging.WARNING, logger="familyassist.wechat"):
+    with caplog.at_level(logging.WARNING, logger="fam.wechat"):
         assert api.send_message(None, MSG) is resp
     assert not caplog.records
 

@@ -20,7 +20,7 @@ import paths as _paths
 import tool_runtime as rt
 from members import load_members, mail_pref
 
-_log = logging.getLogger("familyassist.banner")
+_log = logging.getLogger("fam.banner")
 
 ROOT = Path(__file__).resolve().parents[3]
 STATE_NAME = ".daily_banner_state.json"

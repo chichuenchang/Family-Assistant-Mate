@@ -27,7 +27,7 @@ import mail_draft as _draft
 import mail_rules as _rules
 import mail_watch as _watch
 
-_log = logging.getLogger("familyassist.agent")
+_log = logging.getLogger("fam.agent")
 
 ORDER = 70
 

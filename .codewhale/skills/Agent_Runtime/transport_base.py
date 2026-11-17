@@ -26,7 +26,7 @@ from agent_core import Agent, REGISTRY, Reply, is_clear_command, is_command
 from members import resolve
 from skill_registry import run_ticks
 
-log = logging.getLogger("familyassist.transport")
+log = logging.getLogger("fam.transport")
 
 
 def with_quote(text: str, quoted) -> str:

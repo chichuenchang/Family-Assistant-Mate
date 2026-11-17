@@ -11,4 +11,4 @@
 ## 排障
 
 - 当天已推：`data/.state/.daily_banner_state.json` 删该成员当天日期即可重推（窗口内下一拍，~20 秒）。
-- 推送/成文失败：日志 `familyassist.banner`；进程内 600 秒后重试，`catchup_until` 后放弃当天。
+- 推送/成文失败：日志 `fam.banner`；进程内 600 秒后重试，`catchup_until` 后放弃当天。

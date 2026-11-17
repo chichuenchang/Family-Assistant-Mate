@@ -65,7 +65,7 @@ from members import resolve
 from transport_base import Transport, with_quote as _with_quote
 import paths as _paths
 
-log = logging.getLogger("familyassist.wechat")
+log = logging.getLogger("fam.wechat")
 
 # 凭据存储路径（跟随 data_root；备份硬排除任何含 "creds" 的文件名）
 # 多账号：默认账号 wechat_creds.json，其余 wechat_creds_<标签>.json；SDK cursor 各自紧贴为 .sync

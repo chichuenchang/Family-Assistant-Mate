@@ -35,7 +35,7 @@ import sys
 import urllib.error
 import urllib.request
 
-_log = logging.getLogger("familyassist.agent")
+_log = logging.getLogger("fam.agent")
 
 DEFAULT_TEMPERATURE = 0.3
 # 推理模型的 reasoning 占用 completion 预算，预算过低（曾 1500）会被推理耗尽 →

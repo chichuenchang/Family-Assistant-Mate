@@ -40,7 +40,7 @@ from agent_core import setup_logging
 from transport_base import Transport, with_quote as _with_quote
 import paths as _paths
 
-log = logging.getLogger("familyassist.telegram")
+log = logging.getLogger("fam.telegram")
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 BASE = f"https://api.telegram.org/bot{TOKEN}"

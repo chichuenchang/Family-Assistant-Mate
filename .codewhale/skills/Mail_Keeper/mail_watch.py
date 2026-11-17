@@ -42,7 +42,7 @@ import paths as _paths
 import mail_rules as _rules
 import mail_triage as _triage
 
-_log = logging.getLogger("familyassist.mail")
+_log = logging.getLogger("fam.mail")
 
 STATE_NAME = ".mail_history.{channel}.json"
 LAST_PUSH_NAME = ".mail_last_push.json"

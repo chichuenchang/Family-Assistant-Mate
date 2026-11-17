@@ -180,7 +180,7 @@ def test_config_defaults_applied():
 
 
 def test_reasoning_content_logged(monkeypatch, caplog):
-    """思考链（reasoning_content）进 familyassist.agent 日志；带 tool_calls 的中间
+    """思考链（reasoning_content）进 fam.agent 日志；带 tool_calls 的中间
     assistant 消息进历史时被剥掉 reasoning_content（agent_core 手工重组，不靠运气）。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
@@ -192,7 +192,7 @@ def test_reasoning_content_logged(monkeypatch, caplog):
         {"content": "好"},
     ])
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
-    with caplog.at_level(logging.INFO, logger="familyassist.agent"):
+    with caplog.at_level(logging.INFO, logger="fam.agent"):
         agent.handle("test", user="u", member="爸爸").text
     assert "先想了一下" in caplog.text
     mid = agent.history["u"][1]   # 第一个 assistant（带 tool_calls），非最终回复
@@ -206,7 +206,7 @@ def test_reasoning_log_names_fallback_model(monkeypatch, caplog):
     agent = agent_core.Agent(idle_clear_hours=0)
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": {
         "content": "好", "reasoning_content": "想", "_fallback": "glm-5.3-flash"})
-    with caplog.at_level(logging.INFO, logger="familyassist.agent"):
+    with caplog.at_level(logging.INFO, logger="fam.agent"):
         agent.handle("test", user="u", member="爸爸").text
     assert "模型=glm-5.3-flash" in caplog.text
 

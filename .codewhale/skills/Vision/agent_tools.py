@@ -17,7 +17,7 @@ import llm_providers as _providers
 import tool_runtime as rt
 from tool_runtime import fn, s
 
-_log = logging.getLogger("familyassist.agent")
+_log = logging.getLogger("fam.agent")
 
 ORDER = 16
 MAX_IMAGES = 10      # 单次调用上限；每图 ≤1024 token

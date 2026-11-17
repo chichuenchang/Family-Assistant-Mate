@@ -27,7 +27,7 @@ import jsonfile
 
 ROOT = bootstrap.ROOT
 SKILLS_DIR = bootstrap.SKILLS_DIR
-log = logging.getLogger("familyassist.agent")
+log = logging.getLogger("fam.agent")
 
 
 def load_config() -> dict:

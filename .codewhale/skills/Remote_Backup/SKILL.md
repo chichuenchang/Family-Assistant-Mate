@@ -104,6 +104,14 @@ python .codewhale/skills/Remote_Backup/cli.py backup-reorg --member "Alex Lee"
 `backup_sync._REGISTRY` 即可，引擎零改动。**提交 provider 前自查**：代码里不得出现任何字面
 token/key，凭据只能 `os.environ` 读取。
 
+## 凭据丢失（备份静默停）
+
+2026-07 `GDRIVE_*` 用户环境变量无故消失，停 9 周，`dirty_since` 卡住。
+与 `GCAL_*` 共用客户端时（refresh token 按 scope 各异，勿复制）：ID/SECRET 复制到 `GDRIVE_*`，依次跑 `backup_provider.py --auth`、`backup-now`、`backup-verify`。
+勿新建客户端：Console 只在创建时显示 secret；丢了在原客户端 Add secret 轮换，旧 secret 再停用。新 Cloud 项目看不到旧上传（`drive.file` 授权按项目号）。
+客户端闲置 6 个月 Google 自动删；30 天内 Console Deleted credentials 可恢复。
+myaccount.google.com/permissions 撤销本应用：共用该客户端的 provider token 全死，各跑 `--auth`。
+
 ## 新设备恢复（bootstrap）
 
 新设备上无 `members.json`（注册表存在 Alex 的备份里），存在鸡-蛋问题：

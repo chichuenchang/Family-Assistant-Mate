@@ -135,7 +135,7 @@ _CORE_RULES = [
 def _build_system_prompt(idle_clear_hours: float | None = None) -> str:
     """组装 system prompt：身份 + 成员 + 各 skill 段落（manifest）+ 通用准则。
 
-    工具定义走 API tools 参数。SKILL.md / FamilyAssistant.md 是开发文档，不进 prompt。
+    工具定义走 API tools 参数。SKILL.md / FAM.md 是开发文档，不进 prompt。
     """
     # 家庭成员 + 别名/法定名（data/members.json；空注册表则整段省略）
     members_cfg = _members_registry.load_members()

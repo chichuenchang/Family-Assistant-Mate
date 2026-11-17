@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import pytest
 
 import calendar_provider
+import google_oauth
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +36,7 @@ def gcal(monkeypatch, _no_real_gcal):
     monkeypatch.setenv("GCAL_CLIENT_SECRET", "cs")
     monkeypatch.setenv("GCAL_REFRESH_TOKEN", "rt")
     monkeypatch.delenv("GCAL_CALENDAR_ID", raising=False)
-    monkeypatch.setattr(calendar_provider, "_token", lambda: "TOK")
+    monkeypatch.setattr(google_oauth.GoogleAccount, "token", lambda self: "TOK")
     monkeypatch.setattr(calendar_provider, "_tz_offset", lambda: "+00:00")
 
     calls = []
@@ -44,13 +45,13 @@ def gcal(monkeypatch, _no_real_gcal):
         def __init__(self):
             self.responses = []  # list of (status, body-bytes)
 
-        def __call__(self, method, url, data=None, headers=None):
+        def __call__(self, method, url, data=None, headers=None, timeout=None):
             calls.append({"method": method, "url": url, "data": data,
                           "headers": headers or {}})
             return self.responses.pop(0)
 
     fake = FakeHttp()
-    monkeypatch.setattr(calendar_provider, "_http", fake)
+    monkeypatch.setattr(google_oauth, "_http", fake)
     return fake, calls
 
 

@@ -1,6 +1,6 @@
 # tests/test_mail_keeper.py — Mail Keeper skill tests.
 # No real family names, addresses, or credentials in test data. Never hits Gmail:
-# every provider call goes through the stubbed gmail_provider._http.
+# every provider call goes through the stubbed google_oauth._http.
 import base64
 import json
 import os
@@ -10,6 +10,7 @@ import pytest
 
 import agent_core as ac
 import gmail_provider as gp
+import google_oauth
 import mail_draft as md
 import paths as _paths
 
@@ -27,8 +28,8 @@ def _no_real_gmail(monkeypatch):
             monkeypatch.delenv(k, raising=False)
     for v in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
         monkeypatch.setenv(f"{PREFIX}_{v}", "fake")
-    gp._token_cache.clear()
-    monkeypatch.setitem(gp._token_cache, PREFIX, ("fake-access", time.time() + 3600))
+    gp._accounts.clear()
+    monkeypatch.setattr(google_oauth.GoogleAccount, "token", lambda self: "fake-access")
 
 
 def _b64(s: str) -> str:
@@ -55,7 +56,7 @@ class _Stub:
         self.messages = {m["id"]: m for m in messages}
         self.calls = []
 
-    def __call__(self, method, url, data=None, headers=None):
+    def __call__(self, method, url, data=None, headers=None, timeout=None):
         self.calls.append((method, url, json.loads(data) if data else None))
         if "/messages/send" in url:
             return 200, b'{"id": "sent-1"}'
@@ -73,7 +74,7 @@ class _AttachStub(_Stub):
         super().__init__(messages)
         self.blobs = blobs
 
-    def __call__(self, method, url, data=None, headers=None):
+    def __call__(self, method, url, data=None, headers=None, timeout=None):
         if "/attachments/" in url:
             self.calls.append((method, url, None))
             aid = url.split("/attachments/")[1].split("?")[0]
@@ -85,7 +86,7 @@ class _AttachStub(_Stub):
 @pytest.fixture
 def stub(monkeypatch):
     s = _Stub([_msg()])
-    monkeypatch.setattr(gp, "_http", s)
+    monkeypatch.setattr(google_oauth, "_http", s)
     return s
 
 
@@ -102,7 +103,7 @@ class TestProviderParsing:
     def test_html_only_body_is_stripped_to_text(self, monkeypatch):
         s = _Stub([_msg(body="<p>hi <b>there</b></p><script>x()</script>",
                         mime="text/html")])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         assert gp.get_message("m1", PREFIX)["body"] == "hi there"
 
     def test_multipart_prefers_plain_over_html(self, monkeypatch):
@@ -110,11 +111,11 @@ class TestProviderParsing:
         m["payload"] = {"mimeType": "multipart/alternative", "headers": m["payload"]["headers"],
                         "parts": [{"mimeType": "text/html", "body": {"data": _b64("<p>rich</p>")}},
                                   {"mimeType": "text/plain", "body": {"data": _b64("plain")}}]}
-        monkeypatch.setattr(gp, "_http", _Stub([m]))
+        monkeypatch.setattr(google_oauth, "_http", _Stub([m]))
         assert gp.get_message("m1", PREFIX)["body"] == "plain"
 
     def test_api_error_raises(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", lambda *a, **k: (403, b'{"error":"denied"}'))
+        monkeypatch.setattr(google_oauth, "_http", lambda *a, **k: (403, b'{"error":"denied"}'))
         with pytest.raises(RuntimeError):
             gp.get_message("m1", PREFIX)
 
@@ -592,7 +593,7 @@ class _WatchStub:
         self.history_status = history_status
         self.urls = []
 
-    def __call__(self, method, url, data=None, headers=None):
+    def __call__(self, method, url, data=None, headers=None, timeout=None):
         self.urls.append(url)
         if "/profile" in url:
             return 200, json.dumps({"historyId": self.profile_id}).encode()
@@ -610,21 +611,21 @@ class _WatchStub:
 
 class TestProviderHistory:
     def test_history_since_returns_inbox_additions_and_new_id(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(
             pages=[_hist([_added("m2"), _added("m3")], history_id="777")]))
         rows, hid = gp.history_since("100", PREFIX)
         assert [r["id"] for r in rows] == ["m2", "m3"]
         assert hid == "777"
 
     def test_non_inbox_and_duplicate_additions_are_dropped(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(pages=[_hist(
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(pages=[_hist(
             [_added("m2"), _added("m2"), _added("m9", labels=("SENT",)),
              _added("m8", labels=("INBOX", "TRASH"))])]))
         rows, _ = gp.history_since("100", PREFIX)
         assert [r["id"] for r in rows] == ["m2"]
 
     def test_pagination_is_followed(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(pages=[
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(pages=[
             _hist([_added("m2")], token="p1"), _hist([_added("m3")], history_id="888")]))
         rows, hid = gp.history_since("100", PREFIX)
         assert [r["id"] for r in rows] == ["m2", "m3"] and hid == "888"
@@ -633,42 +634,42 @@ class TestProviderHistory:
         monkeypatch.setattr(gp, "HISTORY_PAGES", 1)
         page = _hist([_added("m2")], history_id="999", token="p1")
         page["history"][0]["id"] = "150"
-        monkeypatch.setattr(gp, "_http", _WatchStub(pages=[page, _hist([_added("m3")])]))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(pages=[page, _hist([_added("m3")])]))
         rows, hid = gp.history_since("100", PREFIX)
         assert [r["id"] for r in rows] == ["m2"] and hid == "150"
 
     def test_metas_skip_deleted_messages_and_keep_order(self, monkeypatch):
         stub = _WatchStub()
-        monkeypatch.setattr(gp, "_http", lambda m, url, *a, **k: (
+        monkeypatch.setattr(google_oauth, "_http", lambda m, url, *a, **k: (
             (404, b"{}") if "/messages/gone" in url else stub(m, url, *a, **k)))
         metas = gp.message_metas(["m2", "gone", "m3"], PREFIX)
         assert [m["id"] for m in metas] == ["m2", "m3"]
 
     def test_get_messages_skip_deleted_and_keep_order_with_body(self, monkeypatch):
         stub = _WatchStub()
-        monkeypatch.setattr(gp, "_http", lambda m, url, *a, **k: (
+        monkeypatch.setattr(google_oauth, "_http", lambda m, url, *a, **k: (
             (404, b"{}") if "/messages/gone" in url else stub(m, url, *a, **k)))
         msgs = gp.get_messages(["m3", "gone", "m2"], PREFIX)
         assert [m["id"] for m in msgs] == ["m3", "m2"]
         assert "body" in msgs[0] and msgs[0]["subject"] == "Subj m3"
 
     def test_get_messages_other_errors_still_raise(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", lambda *a, **k: (500, b"{}"))
+        monkeypatch.setattr(google_oauth, "_http", lambda *a, **k: (500, b"{}"))
         with pytest.raises(RuntimeError):
             gp.get_messages(["m2"], PREFIX)
 
     def test_metas_other_errors_still_raise(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", lambda *a, **k: (500, b"{}"))
+        monkeypatch.setattr(google_oauth, "_http", lambda *a, **k: (500, b"{}"))
         with pytest.raises(RuntimeError):
             gp.message_metas(["m2"], PREFIX)
 
     def test_stale_start_id_reseeds_from_profile(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(profile_id="900", history_status=404))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(profile_id="900", history_status=404))
         rows, hid = gp.history_since("1", PREFIX)
         assert rows is None and hid == "900"
 
     def test_other_http_errors_still_raise(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(history_status=403))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(history_status=403))
         with pytest.raises(RuntimeError):
             gp.history_since("1", PREFIX)
 
@@ -703,7 +704,7 @@ class TestMailWatch:
         return ((gp, PREFIX), "") if pref else (None, "[错误] no mail")
 
     def _run(self, push, stub, monkeypatch, *, channel="wechat", now=None):
-        monkeypatch.setattr(gp, "_http", stub)
+        monkeypatch.setattr(google_oauth, "_http", stub)
         return mw.check_and_push(push, channel, provider_for=self._provider_for, now=now)
 
     def test_first_run_seeds_without_pushing(self, monkeypatch, sent):
@@ -784,7 +785,7 @@ class TestMailWatch:
         out, push = sent
         self._run(push, _WatchStub(profile_id="500"), monkeypatch)
         stub = _WatchStub(pages=[_hist([_added("gone"), _added("m3")], history_id="600")])
-        monkeypatch.setattr(gp, "_http", lambda m, url, *a, **k: (
+        monkeypatch.setattr(google_oauth, "_http", lambda m, url, *a, **k: (
             (404, b"{}") if "/messages/gone" in url else stub(m, url, *a, **k)))
         n = mw.check_and_push(push, "wechat", provider_for=self._provider_for,
                               now=time.time() + 100)
@@ -835,7 +836,7 @@ class TestMailWatch:
 
     def test_tick_runs_the_watch_off_the_caller_thread(self, monkeypatch, sent):
         out, push = sent
-        monkeypatch.setattr(gp, "_http", _WatchStub(profile_id="500"))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(profile_id="500"))
         threads = []
         assert mw.tick(push, "wechat", provider_for=self._provider_for,
                        spawn=lambda f: threads.append(f)) is True
@@ -1007,11 +1008,11 @@ class TestMailWatchFiltering:
         return ((gp, PREFIX), "")
 
     def _seed(self, push, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(profile_id="500"))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(profile_id="500"))
         mw.check_and_push(push, "wechat", provider_for=self._provider_for)
 
     def _poll(self, push, stub, monkeypatch):
-        monkeypatch.setattr(gp, "_http", stub)
+        monkeypatch.setattr(google_oauth, "_http", stub)
         return mw.check_and_push(push, "wechat", provider_for=self._provider_for,
                                  now=time.time() + 100)
 
@@ -1137,7 +1138,7 @@ class TestMailWatchFiltering:
         out, push = sent
         self._seed(push, monkeypatch)
         stub = _WatchStub(pages=[_hist([_added("m2")], history_id="600")])
-        monkeypatch.setattr(gp, "_http", stub)
+        monkeypatch.setattr(google_oauth, "_http", stub)
         mw.check_and_push(lambda c, t: False, "wechat", provider_for=self._provider_for,
                           now=time.time() + 100)
         assert mw._load("wechat")["MemberA"]["history_id"] == "500" and len(llm.calls) == 1
@@ -1249,7 +1250,7 @@ class TestAttachments:
     @pytest.fixture
     def pdf_stub(self, monkeypatch):
         s = _AttachStub([self._msg_with_pdf()], {"a1": b"%PDF-bytes"})
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         return s
 
@@ -1288,7 +1289,7 @@ class TestAttachments:
 
     def test_traversal_filename_stays_in_inbox(self, monkeypatch):
         s = _AttachStub([self._msg_with_pdf(filename="../../evil.pdf")], {"a1": b"%PDF"})
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         out = at.tool_download_attachment({"member": "MemberA", "id": "m1"})
         p = _paths.data_root() / out.splitlines()[0].strip()
@@ -1298,7 +1299,7 @@ class TestAttachments:
         s = _AttachStub([self._msg_with_pdf(filename="setup.exe",
                                             mime="application/octet-stream")],
                         {"a1": b"MZ"})
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         out = at.tool_download_attachment({"member": "MemberA", "id": "m1",
                                           "filename": "setup.exe"})
@@ -1307,14 +1308,14 @@ class TestAttachments:
 
     def test_refuses_oversize(self, monkeypatch):
         s = _AttachStub([self._msg_with_pdf(size=at.ATTACH_MAX_BYTES + 1)], {"a1": b"%PDF"})
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         out = at.tool_download_attachment({"member": "MemberA", "id": "m1"})
         assert out.startswith("[错误]")
         assert not any("/attachments/" in c[1] for c in s.calls)
 
     def test_no_attachment_says_so(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _AttachStub([_msg()], {}))
+        monkeypatch.setattr(google_oauth, "_http", _AttachStub([_msg()], {}))
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         out = at.tool_download_attachment({"member": "MemberA", "id": "m1"})
         assert out.startswith("[错误]") and "附件" in out
@@ -1336,7 +1337,7 @@ class _FilterStub:
         self.scope_ok = scope_ok
         self.calls = []
 
-    def __call__(self, method, url, data=None, headers=None):
+    def __call__(self, method, url, data=None, headers=None, timeout=None):
         payload = json.loads(data) if data else None
         self.calls.append((method, url, payload))
         if not self.scope_ok and method != "GET":
@@ -1372,19 +1373,19 @@ class _FilterStub:
 class TestFilterProvider:
     def test_ensure_label_reuses_existing_case_insensitively(self, monkeypatch):
         s = _FilterStub(labels=["School"])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         assert gp.ensure_label("school", PREFIX) == "L0"
         assert not s.hit("POST", "/labels")
 
     def test_nested_label_creates_parent_first(self, monkeypatch):
         s = _FilterStub()
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         gp.ensure_label(" Family / Bills ", PREFIX)
         assert [c[2]["name"] for c in s.hit("POST", "/labels")] == ["Family", "Family/Bills"]
 
     def test_create_filter_labels_and_skips_inbox(self, monkeypatch):
         s = _FilterStub()
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         gp.create_filter({"from": "school.example", "to": "", "bogus": "x"}, "L9", True, PREFIX)
         body = s.hit("POST", "/settings/filters")[0][2]
         assert body == {"criteria": {"from": "school.example"},
@@ -1392,7 +1393,7 @@ class TestFilterProvider:
 
     def test_keep_in_inbox_omits_remove(self, monkeypatch):
         s = _FilterStub()
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         gp.create_filter({"subject": "bill"}, "L9", False, PREFIX)
         assert "removeLabelIds" not in s.hit("POST", "/settings/filters")[0][2]["action"]
 
@@ -1403,19 +1404,19 @@ class TestFilterProvider:
 
     def test_move_matching_batch_modifies(self, monkeypatch):
         s = _FilterStub(matches=["m1", "m2"])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         assert gp.move_matching("from:x", "L1", True, PREFIX) == 2
         body = s.hit("POST", "/messages/batchModify")[0][2]
         assert body == {"ids": ["m1", "m2"], "addLabelIds": ["L1"], "removeLabelIds": ["INBOX"]}
 
     def test_move_matching_nothing_skips_modify(self, monkeypatch):
         s = _FilterStub()
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         assert gp.move_matching("from:x", "L1", True, PREFIX) == 0
         assert not s.hit("POST", "/messages/batchModify")
 
     def test_old_token_raises_scope_error(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _FilterStub(scope_ok=False))
+        monkeypatch.setattr(google_oauth, "_http", _FilterStub(scope_ok=False))
         with pytest.raises(gp.ScopeError, match="--auth"):
             gp.ensure_label("School", PREFIX)
 
@@ -1431,7 +1432,7 @@ class TestFilterTools:
     @pytest.fixture
     def fstub(self, monkeypatch):
         s = _FilterStub(matches=["m1", "m2", "m3"])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         return s
 
     def _draft(self, **kw):
@@ -1487,7 +1488,7 @@ class TestFilterTools:
         assert md.get("MemberA", at.FILTER_SLOT)["label"] == "学校"
 
     def test_scope_error_keeps_draft(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _FilterStub(matches=["m1"], scope_ok=False))
+        monkeypatch.setattr(google_oauth, "_http", _FilterStub(matches=["m1"], scope_ok=False))
         self._draft()
         out = self._apply()
         assert out.startswith("[错误]") and "--auth" in out
@@ -1497,7 +1498,7 @@ class TestFilterTools:
         s = _FilterStub(labels=["学校"], filters=[{
             "id": "F0", "criteria": {"from": "school.example"},
             "action": {"addLabelIds": ["L0"], "removeLabelIds": ["INBOX"]}}])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         out = at.tool_mail_filters({"member": "MemberA"})
         assert "1. 条件 from:school.example → 学校，不进收件箱" in out
         assert at.tool_mail_filters({"member": "MemberA", "remove": 2}).startswith("[错误]")

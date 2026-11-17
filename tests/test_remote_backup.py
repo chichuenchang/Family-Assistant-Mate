@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 import backup_provider
+import google_oauth
 
 
 @pytest.fixture
@@ -14,7 +15,7 @@ def gdrive(monkeypatch, tmp_path):
     monkeypatch.setenv("GDRIVE_CLIENT_SECRET", "cs")
     monkeypatch.setenv("GDRIVE_REFRESH_TOKEN", "rt")
     prov = backup_provider.GoogleDriveProvider("GDRIVE", "FamilyAssistant")
-    monkeypatch.setattr(prov, "_token", lambda: "TOK")
+    monkeypatch.setattr(google_oauth.GoogleAccount, "token", lambda self: "TOK")
     prov._folder_cache["id"] = "FOLDER1"
 
     calls = []
@@ -22,13 +23,13 @@ def gdrive(monkeypatch, tmp_path):
     class FakeHttp:
         def __init__(self):
             self.responses = []
-        def __call__(self, method, url, data=None, headers=None):
+        def __call__(self, method, url, data=None, headers=None, timeout=None):
             calls.append({"method": method, "url": url, "data": data,
                           "headers": headers or {}})
             return self.responses.pop(0)
 
     fake = FakeHttp()
-    monkeypatch.setattr(backup_provider, "_http", fake)
+    monkeypatch.setattr(google_oauth, "_http", fake)
     return prov, fake, calls, tmp_path
 
 

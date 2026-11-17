@@ -31,10 +31,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); import bootstrap  # noqa: E402,E702  挂全部 skill 目录
@@ -50,23 +47,11 @@ if sys.platform == "win32":
         pass
 
 SCOPE = "https://www.googleapis.com/auth/drive.file"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://www.googleapis.com/drive/v3"
 UPLOAD_API = "https://www.googleapis.com/upload/drive/v3"
 _FOLDER_MIME = "application/vnd.google-apps.folder"
 
 ROOT = Path(__file__).resolve().parents[3]
-
-
-def _http(method: str, url: str, data: bytes | None = None,
-          headers: dict | None = None) -> tuple[int, bytes]:
-    """唯一 HTTP 出口（测试在此打桩）。返回 (status, body)。"""
-    req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=120) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
 
 
 def _q(value: str) -> str:
@@ -87,44 +72,15 @@ class GoogleDriveProvider:
                  remote_root: str = "FamilyAssistant") -> None:
         self.cred_prefix = cred_prefix
         self.remote_root = remote_root
-        self._token_cache: dict = {"access": None, "exp": 0.0}
+        self._account = google_oauth.GoogleAccount(cred_prefix, timeout=120, label="Drive")
         self._folder_cache: dict = {"id": None}
         self._path_cache: dict = {}
 
-    def _env(self, suffix: str) -> str:
-        return os.environ.get(f"{self.cred_prefix}_{suffix}", "")
-
     def is_configured(self) -> bool:
-        return all(self._env(s) for s in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"))
-
-    def _token(self) -> str:
-        if self._token_cache["access"] and time.time() < self._token_cache["exp"]:
-            return self._token_cache["access"]
-        data = urllib.parse.urlencode({
-            "client_id": self._env("CLIENT_ID"),
-            "client_secret": self._env("CLIENT_SECRET"),
-            "refresh_token": self._env("REFRESH_TOKEN"),
-            "grant_type": "refresh_token",
-        }).encode()
-        status, body = _http("POST", TOKEN_URL, data,
-                             {"Content-Type": "application/x-www-form-urlencoded"})
-        if status != 200:
-            raise RuntimeError(f"Google OAuth token 刷新失败 {status}: {body[:200]!r}")
-        tok = json.loads(body)
-        self._token_cache["access"] = tok["access_token"]
-        self._token_cache["exp"] = time.time() + int(tok.get("expires_in", 3600)) - 60
-        return self._token_cache["access"]
+        return self._account.is_configured()
 
     def _api_json(self, method: str, url: str, payload: dict | None = None) -> dict:
-        headers = {"Authorization": f"Bearer {self._token()}"}
-        data = None
-        if payload is not None:
-            data = json.dumps(payload).encode()
-            headers["Content-Type"] = "application/json"
-        status, body = _http(method, url, data, headers)
-        if status >= 300:
-            raise RuntimeError(f"Drive API {method} {url} → {status}: {body[:200]!r}")
-        return json.loads(body) if body else {}
+        return self._account.json(method, url, payload)
 
     def _folder_id(self) -> str:
         if self._folder_cache["id"]:
@@ -199,9 +155,8 @@ class GoogleDriveProvider:
                  f"--{boundary}\r\n"
                  f"Content-Type: application/octet-stream\r\n\r\n").encode()
                 + content + f"\r\n--{boundary}--".encode())
-        headers = {"Authorization": f"Bearer {self._token()}",
-                   "Content-Type": f"multipart/related; boundary={boundary}"}
-        status, resp = _http(method, url, body, headers)
+        status, resp = self._account.request(
+            method, url, body, {"Content-Type": f"multipart/related; boundary={boundary}"})
         if status >= 300:
             raise RuntimeError(f"Drive 上传失败 {remote_rel} → {status}: {resp[:200]!r}")
 
@@ -209,8 +164,7 @@ class GoogleDriveProvider:
         fid = self._find(remote_rel)
         if fid is None:
             return
-        headers = {"Authorization": f"Bearer {self._token()}"}
-        status, body = _http("DELETE", f"{API}/files/{fid}", None, headers)
+        status, body = self._account.request("DELETE", f"{API}/files/{fid}")
         if status >= 300 and status != 404:
             raise RuntimeError(f"Drive 删除失败 {remote_rel} → {status}: {body[:200]!r}")
 
@@ -237,8 +191,7 @@ class GoogleDriveProvider:
         fid = self._find(remote_rel)
         if fid is None:
             raise RuntimeError(f"云端不存在: {remote_rel}")
-        headers = {"Authorization": f"Bearer {self._token()}"}
-        status, body = _http("GET", f"{API}/files/{fid}?alt=media", None, headers)
+        status, body = self._account.request("GET", f"{API}/files/{fid}?alt=media")
         if status >= 300:
             raise RuntimeError(f"Drive 下载失败 {remote_rel} → {status}: {body[:200]!r}")
         target = Path(local_path)

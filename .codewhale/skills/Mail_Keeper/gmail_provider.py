@@ -33,15 +33,11 @@ from __future__ import annotations
 
 import base64
 import html
-import json
 import mimetypes
 import os
 import re
 import sys
-import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from email.message import EmailMessage
@@ -63,7 +59,6 @@ SCOPES = ("https://www.googleapis.com/auth/gmail.readonly "
           "https://www.googleapis.com/auth/gmail.send "
           "https://www.googleapis.com/auth/gmail.modify "           # 建标签、移旧信
           "https://www.googleapis.com/auth/gmail.settings.basic")   # 建/删过滤器
-TOKEN_URL = "https://oauth2.googleapis.com/token"
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
 DEFAULT_PREFIX = "GMAIL"
 BODY_CAP = 6000
@@ -74,55 +69,26 @@ HISTORY_PAGES = 5          # history.list 翻页上限（一轮最多看这么�
 # 新进收件箱但不该播报的标签（自己发的、草稿、垃圾、已删）
 _SKIP_LABELS = {"SENT", "DRAFT", "SPAM", "TRASH"}
 
-_token_cache: dict[str, tuple[str, float]] = {}   # prefix → (access, exp)
-
-
-class ApiError(RuntimeError):
-    """带 HTTP 状态码的 Gmail 错误（本模块内部按码分流，如 history 起点过旧 404）。"""
-
-    def __init__(self, status: int, msg: str):
-        super().__init__(msg)
-        self.status = status
+ApiError = google_oauth.GoogleApiError   # 带 .status；本模块按码分流（如 history 起点过旧 404）
 
 
 class ScopeError(ApiError):
     """token 授权时没给过滤器所需 scope（旧 token）——要重跑 --auth。"""
 
 
+_accounts: dict[str, google_oauth.GoogleAccount] = {}   # prefix → 账号（各持自己的 token 缓存）
+
+
+def _account(prefix: str) -> google_oauth.GoogleAccount:
+    acct = _accounts.get(prefix)
+    if acct is None:
+        acct = _accounts[prefix] = google_oauth.GoogleAccount(
+            prefix, timeout=TIMEOUT_S, label="Gmail")
+    return acct
+
+
 def is_configured(prefix: str = DEFAULT_PREFIX) -> bool:
-    return all(os.environ.get(f"{prefix}_{v}")
-               for v in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"))
-
-
-def _http(method: str, url: str, data: bytes | None = None,
-          headers: dict | None = None) -> tuple[int, bytes]:
-    """唯一 HTTP 出口（测试在此打桩）。"""
-    req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-
-
-def _token(prefix: str) -> str:
-    access, exp = _token_cache.get(prefix, ("", 0.0))
-    if access and time.time() < exp:
-        return access
-    data = urllib.parse.urlencode({
-        "client_id": os.environ[f"{prefix}_CLIENT_ID"],
-        "client_secret": os.environ[f"{prefix}_CLIENT_SECRET"],
-        "refresh_token": os.environ[f"{prefix}_REFRESH_TOKEN"],
-        "grant_type": "refresh_token",
-    }).encode()
-    status, body = _http("POST", TOKEN_URL, data,
-                         {"Content-Type": "application/x-www-form-urlencoded"})
-    if status != 200:
-        raise RuntimeError(f"Google OAuth token 刷新失败 {status}: {body[:200]!r}")
-    tok = json.loads(body)
-    _token_cache[prefix] = (tok["access_token"],
-                            time.time() + int(tok.get("expires_in", 3600)) - 60)
-    return tok["access_token"]
+    return _account(prefix).is_configured()
 
 
 def _api(prefix: str, method: str, path: str, params: dict | list | None = None,
@@ -130,18 +96,13 @@ def _api(prefix: str, method: str, path: str, params: dict | list | None = None,
     url = API + path
     if params:
         url += "?" + urllib.parse.urlencode(params, doseq=True)
-    headers = {"Authorization": f"Bearer {_token(prefix)}"}
-    data = None
-    if payload is not None:
-        data = json.dumps(payload).encode()
-        headers["Content-Type"] = "application/json"
-    status, body = _http(method, url, data, headers)
-    if status == 403 and b"insufficient" in body.lower():
-        raise ScopeError(status, f"邮箱授权缺少权限（旧授权没有过滤器/标签 scope），"
-                                 f"需重跑 gmail_provider.py --auth --prefix {prefix}")
-    if status >= 300:
-        raise ApiError(status, f"Gmail API {method} {path} → {status}: {body[:200]!r}")
-    return json.loads(body) if body else {}
+    try:
+        return _account(prefix).json(method, url, payload)
+    except ApiError as e:
+        if e.status == 403 and b"insufficient" in e.body.lower():
+            raise ScopeError(403, f"邮箱授权缺少权限（旧授权没有过滤器/标签 scope），"
+                                  f"需重跑 gmail_provider.py --auth --prefix {prefix}") from e
+        raise
 
 
 # ── 解析 ────────────────────────────────────────────────────
@@ -243,7 +204,7 @@ def _fetch_many(fetch, ids: list[str], prefix: str) -> list[dict]:
 
     if not ids:
         return []
-    _token(prefix)                        # 先刷好 token，免得各线程各刷一次
+    _account(prefix).token()              # 先刷好 token，免得各线程各刷一次
     with ThreadPoolExecutor(max_workers=META_WORKERS) as pool:
         return [m for m in pool.map(one, ids) if m]
 

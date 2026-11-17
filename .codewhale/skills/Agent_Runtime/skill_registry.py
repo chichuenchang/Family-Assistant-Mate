@@ -34,10 +34,32 @@ from types import ModuleType
 from typing import Callable
 
 import bootstrap
+import context_budget as _budget
 import tool_runtime as rt
 
 log = logging.getLogger("familyassist.agent")
 MANIFEST_NAME = "agent_tools.py"
+ERROR_PREFIX = "[错误]"     # 工具返回以此开头 = 失败（各 skill 统一约定）
+
+
+@dataclass(frozen=True)
+class Caller:
+    """谁在调工具。全部由代码解析（传输层闸门 / Agent 轮次），LLM 给不了也改不了。"""
+    member: str = ""     # members.resolve 解析出的成员名
+    channel: str = ""    # 发起频道（异步回推路由）
+    user: str = ""       # 频道内用户 id
+    turn_id: int = 0     # 该用户本轮序号（两轮确认闸门）
+    said: str = ""       # 用户本人亲手打的字（确认闸门只认它）
+
+
+@dataclass
+class ToolOutcome:
+    """一次工具调用的结果，已按 manifest 声明处理完。"""
+    for_llm: str                 # 本轮回给 LLM（UNTRUSTED_TOOLS 已套围栏）
+    for_history: str              # 跨轮存档（先截断再套围栏：反过来闭合标记会被截掉）
+    images: list[str] = field(default_factory=list)   # IMAGE_TOOLS 成功产出的 data 相对路径
+    docs: list[str] = field(default_factory=list)     # DOC_TOOLS 成功产出的 data 相对路径
+    shown: str = ""               # SHOW_TOOLS 成功原文（必达用户）
 
 
 @dataclass
@@ -68,6 +90,45 @@ class Registry:
             except Exception:
                 log.exception("上下文注入失败（已跳过）: %s", getattr(f, "__name__", f))
         return "".join(out)
+
+    def arguments(self, name: str, args: dict, caller: Caller) -> dict:
+        """LLM 给的参数 → 工具真正收到的参数。
+        kebab 键名换回；MEMBER_LOCKED 剥掉 LLM 给的 member、注入 caller.member（不得跨成员）；
+        CONTEXT_TOOLS 另注入 __channel/__user/__turn_id/__text。其余工具原样放行。"""
+        args = rt.to_manifest_keys(name, args)
+        if name in self.member_locked:
+            args = {k: v for k, v in args.items() if k.lstrip("-") != "member"}
+            if caller.member:
+                args["member"] = caller.member
+        if name in self.context_tools:
+            args = {**args, "__channel": caller.channel or "",
+                    "__user": str(caller.user) if caller.user else "",
+                    "__turn_id": int(caller.turn_id), "__text": caller.said}
+            if caller.member:
+                args["member"] = caller.member
+        return args
+
+    def call(self, name: str, args: dict, caller: Caller) -> ToolOutcome:
+        """执行一次工具调用：参数注入 → 调用 → 判成败 → 收产出文件 → 套围栏/截断。"""
+        fn = self.tool_map.get(name)
+        args = self.arguments(name, args, caller)
+        result = fn(args) if fn else f"{ERROR_PREFIX} 未知工具: {name}"
+        log.debug("工具 %s(%s) → %s", name,
+                  ", ".join(f"{k}={v}" for k, v in args.items()), result[:200])
+        ok = bool(result) and not result.startswith(ERROR_PREFIX)
+        fence = (lambda t: rt.fence(t, name)) if name in self.untrusted_tools else (lambda t: t)
+        out = ToolOutcome(fence(result), fence(_budget.clip_tool_result(result)))
+        if not ok:
+            return out
+        if name in self.image_tools:
+            # 每行一张（fetch_images 多张）；按行不按空白拆——路径可含空格
+            out.images = [ln.strip() for ln in result.splitlines() if ln.strip()]
+        elif name in self.doc_tools:
+            # pdf-edit 第一行是路径，后续可能有"警告:"行——只取首行
+            out.docs = [result.strip().splitlines()[0]]
+        if name in self.show_tools:
+            out.shown = result
+        return out
 
 
 def run_ticks(fns: list[Callable], *args) -> None:

@@ -6,10 +6,10 @@ import agent_core
 
 
 def test_estimate_tokens_cjk_and_ascii():
-    assert agent_core._estimate_tokens("") == 0
-    assert agent_core._estimate_tokens("你好啊") == 3          # CJK ≈ 1 token/字
-    assert agent_core._estimate_tokens("abcdefgh") == 2        # ASCII ≈ 4 字符/token
-    assert agent_core._estimate_tokens("你好ab") == 3          # 2 CJK + 2 ASCII(向上取整)
+    assert agent_core._budget.estimate_tokens("") == 0
+    assert agent_core._budget.estimate_tokens("你好啊") == 3          # CJK ≈ 1 token/字
+    assert agent_core._budget.estimate_tokens("abcdefgh") == 2        # ASCII ≈ 4 字符/token
+    assert agent_core._budget.estimate_tokens("你好ab") == 3          # 2 CJK + 2 ASCII(向上取整)
 
 
 def _turn(q, a):
@@ -22,7 +22,7 @@ def test_save_history_trims_oldest_turns_over_token_budget():
     for i in range(5):
         agent._save_history("u", _turn(f"问题{i}" + "字" * 20, f"回答{i}" + "字" * 20))
     h = agent.history["u"]
-    total = sum(agent_core._msg_tokens(m) for m in h)
+    total = sum(agent_core._budget.msg_tokens(m) for m in h)
     assert total <= 50
     # 整轮丢弃最旧、保留最新：首条必是 user、末条是最后一轮的 assistant
     assert h[0]["role"] == "user" and h[-1]["content"].startswith("回答4")
@@ -81,7 +81,7 @@ def test_idle_clears_history_before_next_message(monkeypatch):
     agent._last_active["u"] = 1_000_000.0
     monkeypatch.setattr(agent_core.time, "time",
                         lambda: 1_000_000.0 + 3 * 3600)  # 闲置 3 小时 > 2
-    agent.handle("新话题", user="u", member="爸爸")  # 无 API key，早退但已过闲置检查
+    agent.handle("新话题", user="u", member="爸爸").text  # 无 API key，早退但已过闲置检查
     assert "u" not in agent.history
     assert agent._last_active["u"] == 1_000_000.0 + 3 * 3600
 
@@ -93,7 +93,7 @@ def test_no_idle_clear_within_window(monkeypatch):
                           {"role": "assistant", "content": "旧回复"}]
     agent._last_active["u"] = 1_000_000.0
     monkeypatch.setattr(agent_core.time, "time", lambda: 1_000_000.0 + 3600)  # 1 小时
-    agent.handle("继续", user="u", member="爸爸")
+    agent.handle("继续", user="u", member="爸爸").text
     assert len(agent.history["u"]) == 2
 
 
@@ -104,7 +104,7 @@ def test_no_idle_clear_when_disabled(monkeypatch):
     agent._last_active["u"] = 1_000_000.0
     monkeypatch.setattr(agent_core.time, "time",
                         lambda: 1_000_000.0 + 1000 * 3600)
-    agent.handle("嗨", user="u", member="爸爸")
+    agent.handle("嗨", user="u", member="爸爸").text
     assert len(agent.history["u"]) == 1
 
 
@@ -117,8 +117,8 @@ def test_idle_clear_is_per_user(monkeypatch):
     agent._last_active["fresh_u"] = 1_000_000.0 + 3 * 3600 - 60
     monkeypatch.setattr(agent_core.time, "time",
                         lambda: 1_000_000.0 + 3 * 3600)
-    agent.handle("x", user="idle_u", member="爸爸")
-    agent.handle("y", user="fresh_u", member="妈妈")
+    agent.handle("x", user="idle_u", member="爸爸").text
+    agent.handle("y", user="fresh_u", member="妈妈").text
     assert "idle_u" not in agent.history
     assert len(agent.history["fresh_u"]) == 1
 
@@ -152,7 +152,7 @@ def _system_text(msgs) -> str:
 def test_system_context_has_current_datetime(monkeypatch):
     agent, captured = _agent_with_captured_llm(monkeypatch)
     monkeypatch.setattr(agent_core, "datetime", _FakeDatetime, raising=False)
-    agent.handle("现在几点", user="u", member="爸爸")
+    agent.handle("现在几点", user="u", member="爸爸").text
     assert captured[0][0]["role"] == captured[0][1]["role"] == "system"   # 静态文档 / 易变块两条
     sys_content = _system_text(captured[0])
     assert "2026-07-11 00:08" in sys_content
@@ -165,9 +165,9 @@ def test_system_datetime_fresh_per_message(monkeypatch):
     agent, captured = _agent_with_captured_llm(monkeypatch)
     monkeypatch.setattr(agent_core, "datetime", _FakeDatetime, raising=False)
     monkeypatch.setattr(_FakeDatetime, "fixed", datetime(2026, 7, 10, 23, 47))
-    agent.handle("test", user="u", member="爸爸")
+    agent.handle("test", user="u", member="爸爸").text
     monkeypatch.setattr(_FakeDatetime, "fixed", datetime(2026, 7, 11, 0, 8))
-    agent.handle("你现在这里几点", user="u", member="爸爸")
+    agent.handle("你现在这里几点", user="u", member="爸爸").text
     assert "2026-07-10 23:47" in _system_text(captured[0])
     assert "2026-07-11 00:08" in _system_text(captured[1])
     assert "2026-07-10 23:47" not in _system_text(captured[1])
@@ -184,7 +184,7 @@ def test_reasoning_content_logged(monkeypatch, caplog):
     assistant 消息进历史时被剥掉 reasoning_content（agent_core 手工重组，不靠运气）。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
-    monkeypatch.setitem(agent_core._TOOL_MAP, "fake_scan", lambda a: "ok")
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "fake_scan", lambda a: "ok")
     replies = iter([
         {"content": "", "reasoning_content": "先想了一下",
          "tool_calls": [{"id": "t1", "function": {
@@ -193,7 +193,7 @@ def test_reasoning_content_logged(monkeypatch, caplog):
     ])
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
     with caplog.at_level(logging.INFO, logger="familyassist.agent"):
-        agent.handle("test", user="u", member="爸爸")
+        agent.handle("test", user="u", member="爸爸").text
     assert "先想了一下" in caplog.text
     mid = agent.history["u"][1]   # 第一个 assistant（带 tool_calls），非最终回复
     assert mid["role"] == "assistant" and mid.get("tool_calls")
@@ -207,7 +207,7 @@ def test_reasoning_log_names_fallback_model(monkeypatch, caplog):
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": {
         "content": "好", "reasoning_content": "想", "_fallback": "glm-5.3-flash"})
     with caplog.at_level(logging.INFO, logger="familyassist.agent"):
-        agent.handle("test", user="u", member="爸爸")
+        agent.handle("test", user="u", member="爸爸").text
     assert "模型=glm-5.3-flash" in caplog.text
 
 
@@ -216,7 +216,7 @@ def test_tool_results_persist_across_turns(monkeypatch):
     否则模型只见自己的文字回复（不含 id），会拿 PDF 文件名瞎编会话 id。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
-    monkeypatch.setitem(agent_core._TOOL_MAP, "fake_scan",
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "fake_scan",
                         lambda a: "会话: 20260713_222813_2b73\n类型: acroform")
     replies = iter([
         {"content": "", "tool_calls": [{"id": "t1", "function": {
@@ -231,8 +231,8 @@ def test_tool_results_persist_across_turns(monkeypatch):
         return next(replies)
 
     monkeypatch.setattr(agent, "_call_llm", fake_llm)
-    agent.handle("帮我填表", user="u", member="Jim")
-    agent.handle("对", user="u", member="Jim")
+    agent.handle("帮我填表", user="u", member="Jim").text
+    agent.handle("对", user="u", member="Jim").text
 
     h = agent.history["u"]
     assert any(m["role"] == "assistant" and m.get("tool_calls") for m in h)
@@ -249,17 +249,17 @@ def test_huge_tool_result_truncated_in_history(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
     big = "会话: 20260713_222813_2b73\n" + "字" * 5000
-    monkeypatch.setitem(agent_core._TOOL_MAP, "fake_big", lambda a: big)
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "fake_big", lambda a: big)
     replies = iter([
         {"content": "", "tool_calls": [{"id": "t1", "function": {
             "name": "fake_big", "arguments": "{}"}}]},
         {"content": "好"},
     ])
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
-    agent.handle("扫描", user="u", member="Jim")
+    agent.handle("扫描", user="u", member="Jim").text
     tool_msgs = [m for m in agent.history["u"] if m["role"] == "tool"]
     assert len(tool_msgs) == 1
-    assert len(tool_msgs[0]["content"]) <= agent_core._HIST_TOOL_CAP + 20
+    assert len(tool_msgs[0]["content"]) <= agent_core._budget.HIST_TOOL_CAP + 20
     assert tool_msgs[0]["content"].startswith("会话: 20260713_222813_2b73")  # 首行保留
     assert "截断" in tool_msgs[0]["content"]
 
@@ -269,7 +269,7 @@ def _tool_loop_agent(monkeypatch, final):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
     ran = []
-    monkeypatch.setitem(agent_core._TOOL_MAP, "fake_ocr", lambda a: ran.append(1) or "ok")
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "fake_ocr", lambda a: ran.append(1) or "ok")
     calls = []
 
     def fake_llm(msgs, user=""):
@@ -286,7 +286,7 @@ def _tool_loop_agent(monkeypatch, final):
 def test_tool_round_cap_gets_summary_reply(monkeypatch):
     """轮数用完仍在调工具：补一次收尾调用，回复用户已完成/剩余，不再是"生成回复失败"。"""
     agent, ran, calls = _tool_loop_agent(monkeypatch, {"content": "已处理 9 张，剩 16 张，回复继续"})
-    out = agent.handle("OCR 全部账单", user="u", member="Jim")
+    out = agent.handle("OCR 全部账单", user="u", member="Jim").text
     assert len(calls) == agent_core.TOOL_ROUNDS + 1
     assert len(ran) == agent_core.TOOL_ROUNDS
     assert "剩 16 张" in out and "生成回复失败" not in out
@@ -298,7 +298,7 @@ def test_tool_round_cap_summary_tool_calls_not_run(monkeypatch):
     """收尾调用仍返回 tool_calls：不执行，无文字则退回原兜底文案。"""
     agent, ran, _ = _tool_loop_agent(monkeypatch, {"content": "", "tool_calls": [
         {"id": "x", "function": {"name": "fake_ocr", "arguments": "{}"}}]})
-    out = agent.handle("OCR 全部账单", user="u", member="Jim")
+    out = agent.handle("OCR 全部账单", user="u", member="Jim").text
     assert len(ran) == agent_core.TOOL_ROUNDS
     assert "生成回复失败" in out
 
@@ -306,7 +306,7 @@ def test_tool_round_cap_summary_tool_calls_not_run(monkeypatch):
 def test_model_sees_snake_case_params_and_cli_gets_kebab_flags(monkeypatch):
     # 模型只见一种命名（snake_case）；派发前换回 manifest 的 kebab 名 → CLI 标志不变
     import tool_runtime as rt
-    props = {k for t in agent_core.TOOL_SCHEMAS
+    props = {k for t in agent_core.REGISTRY.schemas
              for k in t["function"]["parameters"]["properties"]}
     assert not [k for k in props if "-" in k]
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
@@ -320,5 +320,5 @@ def test_model_sees_snake_case_params_and_cli_gets_kebab_flags(monkeypatch):
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
     seen = []
     monkeypatch.setattr(rt, "run_cli", lambda cmd, args=None: seen.append((cmd, args)) or "ok")
-    agent.handle("存了定期", user="u", member="爸爸")
+    agent.handle("存了定期", user="u", member="爸爸").text
     assert seen == [("deposit-add", {"amount": 1000, "start-date": "2026-01-01", "member": "爸爸"})]

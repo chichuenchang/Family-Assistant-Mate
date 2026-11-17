@@ -60,7 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); 
 
 import logging
 
-from agent_core import Agent, setup_logging, split_reply as _split_reply
+from agent_core import Agent, setup_logging
 from members import resolve
 from transport_base import Transport, with_quote as _with_quote
 import paths as _paths
@@ -488,13 +488,12 @@ def run_test() -> None:
         if msg.lower() in ("quit", "exit", "q"):
             break
         reply = agent.handle(msg, member="本地测试")
-        text, imgs, docs = _split_reply(reply)
-        for rel in imgs:
+        for rel in reply.images:
             print(f"助手> [图片] {rel}")
-        for rel in docs:
+        for rel in reply.docs:
             print(f"助手> [文件] {rel}")
-        if text:
-            print(f"助手> {text}")
+        if reply.text:
+            print(f"助手> {reply.text}")
         print()
 
 

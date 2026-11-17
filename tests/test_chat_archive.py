@@ -26,7 +26,7 @@ def _agent(monkeypatch, channel="wechat"):
 
 def test_handle_appends_said_and_reply(monkeypatch, archive_file):
     agent = _agent(monkeypatch)
-    agent.handle("引用: 旧消息\n发票多少钱", user="u", member="爸爸", said="发票多少钱")
+    agent.handle("引用: 旧消息\n发票多少钱", user="u", member="爸爸", said="发票多少钱").text
     row = json.loads(archive_file.read_text(encoding="utf-8").splitlines()[0])
     assert (row["channel"], row["user"], row["said"], row["reply"]) == (
         "wechat", "u", "发票多少钱", "42 元")
@@ -37,11 +37,11 @@ def test_handle_media_archives_paths_for_later_lookup(monkeypatch, archive_file)
     import paths as _paths
     agent = _agent(monkeypatch)
     img = _paths.data_root() / "Archived" / "inbox" / "x.jpg"
-    agent.handle_media([str(img)], "这是什么", user="u", member="爸爸")
+    agent.handle_media([str(img)], "这是什么", user="u", member="爸爸").text
     row = json.loads(archive_file.read_text(encoding="utf-8").splitlines()[0])
     assert row["said"] == "这是什么" and row["media"] == ["Archived/inbox/x.jpg"]
     assert "来件: Archived/inbox/x.jpg\n    助手: 42 元" in chat_archive.read("wechat", "u")
-    agent.handle("好的", user="u", member="爸爸")
+    agent.handle("好的", user="u", member="爸爸").text
     assert "media" not in json.loads(archive_file.read_text(encoding="utf-8").splitlines()[1])
 
 
@@ -50,7 +50,7 @@ def test_llm_failure_after_tool_still_archived(monkeypatch, archive_file):
     calls = iter([{"content": "", "tool_calls": [{"id": "1", "function": {
         "name": "chat_history", "arguments": "{}"}}]}, None])
     monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(calls))
-    out = agent.handle("机票订了吗", user="u", member="爸爸")
+    out = agent.handle("机票订了吗", user="u", member="爸爸").text
     assert "工具已执行" in out
     row = json.loads(archive_file.read_text(encoding="utf-8").splitlines()[0])
     assert row["said"] == "机票订了吗"
@@ -58,13 +58,13 @@ def test_llm_failure_after_tool_still_archived(monkeypatch, archive_file):
 
 def test_commands_not_archived(monkeypatch, archive_file):
     agent = _agent(monkeypatch)
-    agent.handle("/clear", user="u", member="爸爸")
+    agent.handle("/clear", user="u", member="爸爸").text
     assert not archive_file.exists()
 
 
 def test_survives_new_agent_instance(monkeypatch):
-    _agent(monkeypatch).handle("机票订了吗", user="u", member="爸爸")
-    _agent(monkeypatch).handle("酒店呢", user="u", member="爸爸")   # 模拟重启
+    _agent(monkeypatch).handle("机票订了吗", user="u", member="爸爸").text
+    _agent(monkeypatch).handle("酒店呢", user="u", member="爸爸").text   # 模拟重启
     out = chat_archive.read("wechat", "u")
     assert out.index("机票") < out.index("酒店")   # 旧在前
 
@@ -119,8 +119,9 @@ def test_missing_file_is_empty():
 
 def test_tool_reads_injected_user_only():
     chat_archive.append("wechat", "u", "旧话题", "旧回复")
-    tool = agent_core._TOOL_MAP["chat_history"]
-    targs = agent_core._apply_context("chat_history", {"query": "旧"}, "wechat", "u", "爸爸")
+    tool = agent_core.REGISTRY.tool_map["chat_history"]
+    targs = agent_core.REGISTRY.arguments("chat_history", {"query": "旧"}, agent_core.Caller(
+        channel="wechat", user="u", member="爸爸"))
     assert "旧话题" in tool(targs)
     assert "旧话题" not in tool({"__channel": "wechat", "__user": "other"})
     assert tool({}).startswith("[错误]")

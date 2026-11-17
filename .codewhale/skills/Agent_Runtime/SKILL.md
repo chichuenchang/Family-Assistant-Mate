@@ -21,7 +21,7 @@
 ├── bootstrap.py        ← sys.path 单一入口
 ├── backup_hook.py      ← 各 CLI 写入后 mark_dirty
 ├── jsonfile.py         ← config.json / 状态文件读写（缺失/损坏读作 {}）
-├── google_oauth.py     ← Google provider 共用 --auth 回环授权
+├── google_oauth.py     ← Google provider 共用：GoogleAccount（token + 认证调用）、--auth 回环授权
 ├── members.py          ← 成员注册表（频道 id → 成员名；存 git 忽略的 data/members.json）
 ├── paths.py            ← 磁盘布局解析（数据落盘位置的单一事实来源）
 ├── migrate_storage.py  ← 旧单库/旧目录 → 按成员分库的一次性迁移
@@ -98,7 +98,7 @@ python .codewhale/skills/Agent_Runtime/telegram_bot.py --no-debug
 ## 新增频道
 
 加一个频道 = 继承 `transport_base.Transport`，实现三个 send_*，把 SDK 消息翻译成 `on_text` / `on_media`。
-闸门、节流刷新、来件落盘、哨兵拆分投递、异常兜底、到期提醒 / 懂王投递 / 备份节拍全在基类，不复制。
+闸门、节流刷新、来件落盘、回复投递（`Reply` 的图/文档/文字）、异常兜底、到期提醒 / 懂王投递 / 备份节拍全在基类，不复制。
 
 ```python
 # .codewhale/skills/Agent_Runtime/mychannel_bot.py
@@ -153,7 +153,7 @@ YouTube/X/Reddit/TikTok/Instagram/Bilibili/Zhihu 搜集"大家在怎么说"，�
   "已开始"给用户；出报告后由传输层轮询 `poll_and_deliver(send_fn, channel)` 把报告推回**发起人**
   （manifest `FAST_TICKS`；Telegram 挂在长轮询尾部 ~30s，微信走 `fast-tick` 守护线程 ~20s）。
 - **频道上下文注入**：`Agent(channel=...)`（各传输层构造时传 `"wechat"`/`"telegram"`）+ handle 里
-  `_apply_context` 把 `__channel`/`__user`/`member` 注入 `knowking` 工具参数（代码确定性，LLM 不得伪造投递目标）。本地测试无 channel → 工具返回"仅正式频道可用"。
+  `skill_registry.Registry.arguments` 把 `__channel`/`__user`/`member` 注入 `knowking` 工具参数（代码确定性，LLM 不得伪造投递目标）。本地测试无 channel → 工具返回"仅正式频道可用"。
 - **任务落盘** `data/.state/.knowking_jobs/<id>.json`（运行时瞬态，已列入 `backup_sync._HARD_EXCLUDE_DIRS`
   绝不进云备份；投递成功即删，删除失败标 delivered 下轮只清理绝不重发）。
   `running` 超 `stale_seconds`（默认 1800s，bot 重启/线程死）→ 记超时 error 再推送。同频道同用户
@@ -171,9 +171,9 @@ YouTube/X/Reddit/TikTok/Instagram/Bilibili/Zhihu 搜集"大家在怎么说"，�
 
 ## 安全
 
-- **命令白名单**：`config.json` 的 `wechat.allowed_commands` 是**记账族**命令白名单（`agent_core.ALLOWED_COMMANDS` 读取，config 缺失才回退内置集）；改它只影响记账族。备忘(note-*)/工作表(sheet-*)/图表(chart-render)/日程(cal-*)/文档(doc-* 除 doc-remove)/备份(backup-now/status/verify)/联网(web-*/any-*) 是 Agent 核心能力，`agent_core` 在装载时**恒定并入** `ALLOWED_COMMANDS`，不受本白名单增删影响。成员增删、doc-remove、backup-restore/reorg 等敏感命令既不在白名单也不并入 → Agent 调不到，仅限本机。
-- **磁盘布局**：所有数据落盘位置经 `Agent_Runtime/paths.py`（单一事实来源）。`config.json` `data_root`(默认 data)+`family_dir_name`(默认 Family) 定根。家庭共享在 `data/Family/`（ledger.db 财务、documents.db 文档+成员资料、receipts/、documents/）；成员私有在 `data/<成员>/`（notes/、inbox/、pdf_edits/）。来图存发送者 `data/<成员>/inbox/`；备忘图搬 notes/，其余留 inbox。`agent_core.RECEIPTS_DIR`/`DOCUMENTS_DIR` 由 `paths` 计算，不硬编码。
-- **成员注册表**：`data/members.json`（git 不跟踪 — 姓名/频道 id 属隐私）只在本机用 `Expense_Tracker/cli.py member-add/list/remove` 管理（成员命令挂在记账 CLI 上，非本目录；不在命令白名单内，Agent 调不到）。未注册频道 id 一律静默丢弃；写入类账目的归属由 `agent_core` 注入解析出的成员名，LLM 给的 member 一律剥离（防冒名）。
+- **命令白名单**：`config.json` 的 `wechat.allowed_commands` 是**记账族**命令白名单（`Expense_Tracker/agent_tools.py` `AGENT_COMMANDS` 读取，config 缺失才回退内置集）；改它只影响记账族。备忘(note-*)/工作表(sheet-*)/图表(chart-render)/日程(cal-*)/文档(doc-* 除 doc-remove)/备份(backup-now/status/verify)/联网(web-*/any-*) 是 Agent 核心能力，`skill_registry.load` 装载时按各 manifest **恒定并入** `tool_runtime.ALLOWED`，不受本白名单增删影响。成员增删、doc-remove、backup-restore/reorg 等敏感命令既不在白名单也不并入 → Agent 调不到，仅限本机。
+- **磁盘布局**：所有数据落盘位置经 `Agent_Runtime/paths.py`（单一事实来源）。`config.json` `data_root`(默认 data)+`family_dir_name`(默认 Family) 定根。家庭共享在 `data/Family/`（ledger.db 财务、documents.db 文档+成员资料、receipts/、documents/）；成员私有在 `data/<成员>/`（notes/、inbox/、pdf_edits/）。来图存发送者 `data/<成员>/inbox/`；备忘图搬 notes/，其余留 inbox。
+- **成员注册表**：`data/members.json`（git 不跟踪 — 姓名/频道 id 属隐私）只在本机用 `Expense_Tracker/cli.py member-add/list/remove` 管理（成员命令挂在记账 CLI 上，非本目录；不在命令白名单内，Agent 调不到）。未注册频道 id 一律静默丢弃；写入类账目的归属由 `skill_registry.Registry.arguments` 注入解析出的成员名，LLM 给的 member 一律剥离（防冒名）。
 - **外部内容围栏**：非本地来源文本经 `tool_runtime.fence` 才进 LLM——manifest `UNTRUSTED_TOOLS` 的工具结果、来件 OCR、引用消息。软防线：降低注入命中率，不限制损害；备忘/工作表/成员资料（本地库）未套。
 - **凭据本地化**：所有频道凭据（微信扫码态、Telegram token）只存本地，不外传。
 - Telegram token 走环境变量，不写进仓库。

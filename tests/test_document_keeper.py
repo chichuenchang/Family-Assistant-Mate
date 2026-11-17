@@ -355,24 +355,24 @@ import agent_core
 
 class TestAgentIntegration:
     def test_doc_commands_route_to_document_keeper_cli(self):
-        p = agent_core._cli_path("doc-add")
+        p = agent_core.rt.cli_path("doc-add")
         assert p.parts[-2] == "Document_Keeper"
-        p = agent_core._cli_path("add")
+        p = agent_core.rt.cli_path("add")
         assert p.parts[-2] == "Expense_Tracker"
 
     def test_doc_commands_whitelisted_except_remove(self):
         for cmd in ("doc-add", "doc-list", "doc-show", "doc-due", "doc-update", "doc-ack"):
-            assert cmd in agent_core.ALLOWED_COMMANDS
-        assert "doc-remove" not in agent_core.ALLOWED_COMMANDS
+            assert cmd in agent_core.rt.ALLOWED
+        assert "doc-remove" not in agent_core.rt.ALLOWED
 
     def test_add_document_is_member_write_tool(self):
-        out = agent_core._apply_member("add_document",
-                                       {"type": "lease", "member": "假冒"}, "爸爸")
+        out = agent_core.REGISTRY.arguments("add_document",
+                                       {"type": "lease", "member": "假冒"}, agent_core.Caller(member="爸爸"))
         assert out["member"] == "爸爸"
 
     def test_document_tools_registered(self):
         for name in ("add_document", "list_documents", "show_document",
                      "due_documents", "update_document", "ack_document"):
-            assert name in agent_core._TOOL_MAP
-        schema_names = {t["function"]["name"] for t in agent_core.TOOL_SCHEMAS}
+            assert name in agent_core.REGISTRY.tool_map
+        schema_names = {t["function"]["name"] for t in agent_core.REGISTRY.schemas}
         assert "add_document" in schema_names and "due_documents" in schema_names

@@ -14,17 +14,17 @@ import knowking_jobs as kj
 
 class TestRegistration:
     def test_knowking_in_schema_and_map(self):
-        schema_names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        schema_names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         assert "knowking" in schema_names
-        assert "knowking" in ac._TOOL_MAP
+        assert "knowking" in ac.REGISTRY.tool_map
 
     def test_knowking_schema_requires_topic(self):
-        fn = next(t["function"] for t in ac.TOOL_SCHEMAS
+        fn = next(t["function"] for t in ac.REGISTRY.schemas
                   if t["function"]["name"] == "knowking")
         assert fn["parameters"]["required"] == ["topic"]
 
     def test_knowking_description_names_trigger_keywords(self):
-        fn = next(t["function"] for t in ac.TOOL_SCHEMAS
+        fn = next(t["function"] for t in ac.REGISTRY.schemas
                   if t["function"]["name"] == "knowking")
         desc = fn["function"]["description"] if "function" in fn else fn["description"]
         for kw in ("knowking", "kk", "懂王"):
@@ -32,7 +32,7 @@ class TestRegistration:
 
     def test_knowking_not_a_cli_command(self):
         # bespoke tool (own subprocess/uv); must NOT be routed as a skill CLI command
-        assert "knowking" not in ac.ALLOWED_COMMANDS
+        assert "knowking" not in ac.rt.ALLOWED
 
 
 class TestChannel:
@@ -45,15 +45,17 @@ class TestChannel:
 
 
 class TestContextInjection:
-    def test_apply_context_injects_channel_user_member_for_knowking(self):
-        out = ac._apply_context("knowking", {"topic": "X"}, "telegram", "555", "Jim")
+    def test_arguments_context_injects_channel_user_member_for_knowking(self):
+        out = ac.REGISTRY.arguments("knowking", {"topic": "X"},
+                                    ac.Caller(channel="telegram", user="555", member="Jim"))
         assert out["__channel"] == "telegram"
         assert out["__user"] == "555"
         assert out["member"] == "Jim"
         assert out["topic"] == "X"
 
-    def test_apply_context_noop_for_other_tools(self):
-        out = ac._apply_context("web_search", {"query": "X"}, "telegram", "555", "Jim")
+    def test_arguments_context_noop_for_other_tools(self):
+        out = ac.REGISTRY.arguments("web_search", {"query": "X"},
+                                    ac.Caller(channel="telegram", user="555", member="Jim"))
         assert "__channel" not in out and "__user" not in out
 
 

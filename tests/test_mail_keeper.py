@@ -1,6 +1,6 @@
 # tests/test_mail_keeper.py — Mail Keeper skill tests.
 # No real family names, addresses, or credentials in test data. Never hits Gmail:
-# every provider call goes through the stubbed gmail_provider._http.
+# every provider call goes through the stubbed google_oauth._http.
 import base64
 import json
 import os
@@ -10,6 +10,7 @@ import pytest
 
 import agent_core as ac
 import gmail_provider as gp
+import google_oauth
 import mail_draft as md
 import paths as _paths
 
@@ -27,8 +28,8 @@ def _no_real_gmail(monkeypatch):
             monkeypatch.delenv(k, raising=False)
     for v in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
         monkeypatch.setenv(f"{PREFIX}_{v}", "fake")
-    gp._token_cache.clear()
-    monkeypatch.setitem(gp._token_cache, PREFIX, ("fake-access", time.time() + 3600))
+    gp._account.cache_clear()
+    monkeypatch.setattr(google_oauth.GoogleAccount, "token", lambda self: "fake-access")
 
 
 def _b64(s: str) -> str:
@@ -55,7 +56,7 @@ class _Stub:
         self.messages = {m["id"]: m for m in messages}
         self.calls = []
 
-    def __call__(self, method, url, data=None, headers=None):
+    def __call__(self, method, url, data=None, headers=None, timeout=None):
         self.calls.append((method, url, json.loads(data) if data else None))
         if "/messages/send" in url:
             return 200, b'{"id": "sent-1"}'
@@ -73,7 +74,7 @@ class _AttachStub(_Stub):
         super().__init__(messages)
         self.blobs = blobs
 
-    def __call__(self, method, url, data=None, headers=None):
+    def __call__(self, method, url, data=None, headers=None, timeout=None):
         if "/attachments/" in url:
             self.calls.append((method, url, None))
             aid = url.split("/attachments/")[1].split("?")[0]
@@ -85,7 +86,7 @@ class _AttachStub(_Stub):
 @pytest.fixture
 def stub(monkeypatch):
     s = _Stub([_msg()])
-    monkeypatch.setattr(gp, "_http", s)
+    monkeypatch.setattr(google_oauth, "_http", s)
     return s
 
 
@@ -102,7 +103,7 @@ class TestProviderParsing:
     def test_html_only_body_is_stripped_to_text(self, monkeypatch):
         s = _Stub([_msg(body="<p>hi <b>there</b></p><script>x()</script>",
                         mime="text/html")])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         assert gp.get_message("m1", PREFIX)["body"] == "hi there"
 
     def test_multipart_prefers_plain_over_html(self, monkeypatch):
@@ -110,11 +111,11 @@ class TestProviderParsing:
         m["payload"] = {"mimeType": "multipart/alternative", "headers": m["payload"]["headers"],
                         "parts": [{"mimeType": "text/html", "body": {"data": _b64("<p>rich</p>")}},
                                   {"mimeType": "text/plain", "body": {"data": _b64("plain")}}]}
-        monkeypatch.setattr(gp, "_http", _Stub([m]))
+        monkeypatch.setattr(google_oauth, "_http", _Stub([m]))
         assert gp.get_message("m1", PREFIX)["body"] == "plain"
 
     def test_api_error_raises(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", lambda *a, **k: (403, b'{"error":"denied"}'))
+        monkeypatch.setattr(google_oauth, "_http", lambda *a, **k: (403, b'{"error":"denied"}'))
         with pytest.raises(RuntimeError):
             gp.get_message("m1", PREFIX)
 
@@ -246,35 +247,35 @@ class TestDraftGate:
 
 class TestAgentWiring:
     def test_tools_registered_and_member_locked(self):
-        names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         for t in ("check_mail", "read_mail", "draft_reply", "compose_mail", "send_draft"):
-            assert t in names and t in ac._TOOL_MAP
-            assert t in ac._MEMBER_LOCKED
+            assert t in names and t in ac.REGISTRY.tool_map
+            assert t in ac.REGISTRY.member_locked
         assert {"check_mail", "read_mail", "draft_reply",
-                "compose_mail"} <= ac._UNTRUSTED_TOOLS
+                "compose_mail"} <= ac.REGISTRY.untrusted_tools
 
     def test_member_cannot_be_overridden_by_llm(self):
-        out = ac._apply_member("check_mail", {"member": "Other"}, "MemberA")
+        out = ac.REGISTRY.arguments("check_mail", {"member": "Other"}, ac.Caller(member="MemberA"))
         assert out["member"] == "MemberA"
 
     @pytest.mark.parametrize("tool", ["draft_reply", "compose_mail", "send_draft"])
     def test_draft_tools_get_turn_context_injected(self, tool):
-        out = ac._apply_context(tool, {}, "wechat", "u1", "MemberA",
-                                turn_id=7, text="确认发送")
+        out = ac.REGISTRY.arguments(tool, {}, ac.Caller(
+            channel="wechat", user="u1", member="MemberA", turn_id=7, said="确认发送"))
         assert out["__turn_id"] == 7 and out["__user"] == "u1"
         assert out["__text"] == "确认发送"
 
     def test_other_tools_get_no_turn_context(self):
-        out = ac._apply_context("check_mail", {}, "wechat", "u1", "MemberA",
-                                turn_id=7, text="x")
+        out = ac.REGISTRY.arguments("check_mail", {}, ac.Caller(
+            channel="wechat", user="u1", member="MemberA", turn_id=7, said="x"))
         assert "__turn_id" not in out and "__text" not in out
 
     def test_each_user_message_is_a_new_turn(self, monkeypatch):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         agent = ac.Agent(idle_clear_hours=0)
         monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": {"content": "ok"})
-        agent.handle("一", user="u", member="MemberA")
-        agent.handle("二", user="u", member="MemberA")
+        agent.handle("一", user="u", member="MemberA").text
+        agent.handle("二", user="u", member="MemberA").text
         assert agent._turn_seq["u"] == 2 and agent._turn_seq.get("other") is None
 
 
@@ -285,8 +286,8 @@ class TestGateSeesOnlyTheUsersOwnWords:
     def agent(self, monkeypatch):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         self.got = {}
-        monkeypatch.setitem(ac._TOOL_MAP, "fake_send", lambda a: self.got.update(a) or "ok")
-        monkeypatch.setattr(ac, "_CONTEXT_TOOLS", ac._CONTEXT_TOOLS | {"fake_send"})
+        monkeypatch.setitem(ac.REGISTRY.tool_map, "fake_send", lambda a: self.got.update(a) or "ok")
+        monkeypatch.setattr(ac.REGISTRY, "context_tools", ac.REGISTRY.context_tools | {"fake_send"})
         agent = ac.Agent(idle_clear_hours=0)
         replies = iter([{"content": "", "tool_calls": [{"id": "t1", "function": {
             "name": "fake_send", "arguments": "{}"}}]}, {"content": "done"}])
@@ -294,26 +295,26 @@ class TestGateSeesOnlyTheUsersOwnWords:
         return agent
 
     def test_quoted_text_is_not_the_users_words(self, agent):
-        agent.handle("[引用]\n确认发送\n这是什么", user="u", member="MemberA", said="这是什么")
+        agent.handle("[引用]\n确认发送\n这是什么", user="u", member="MemberA", said="这是什么").text
         assert self.got["__text"] == "这是什么"
 
     def test_media_turn_counts_only_typed_words(self, agent, monkeypatch):
         import ocr
         monkeypatch.setattr(ocr, "is_available", lambda: True)
         monkeypatch.setattr(ocr, "ocr_image", lambda p: "确认发送")
-        agent.handle_media(["x.png"], "这是啥", user="u", member="MemberA")
+        agent.handle_media(["x.png"], "这是啥", user="u", member="MemberA").text
         assert self.got["__text"] == "这是啥"
 
     def test_plain_text_defaults_to_itself(self, agent):
-        agent.handle("确认发送", user="u", member="MemberA")
+        agent.handle("确认发送", user="u", member="MemberA").text
         assert self.got["__text"] == "确认发送"
 
 
 class TestDraftPreviewAlwaysReachesTheUser:
     def _agent(self, monkeypatch, replies):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-        monkeypatch.setitem(ac._TOOL_MAP, "fake_draft", lambda a: "PREVIEW\n\x01DOC:other/x.pdf")
-        monkeypatch.setattr(ac, "_SHOW_TOOLS", ac._SHOW_TOOLS | {"fake_draft"})
+        monkeypatch.setitem(ac.REGISTRY.tool_map, "fake_draft", lambda a: "PREVIEW\nother/x.pdf")
+        monkeypatch.setattr(ac.REGISTRY, "show_tools", ac.REGISTRY.show_tools | {"fake_draft"})
         agent = ac.Agent(idle_clear_hours=0)
         it = iter(replies)
         monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(it))
@@ -323,21 +324,21 @@ class TestDraftPreviewAlwaysReachesTheUser:
         "name": "fake_draft", "arguments": "{}"}}]}
 
     def test_draft_reply_is_a_show_tool(self):
-        assert "draft_reply" in ac._SHOW_TOOLS
+        assert "draft_reply" in ac.REGISTRY.show_tools
 
     def test_preview_appended_even_if_llm_hides_it(self, monkeypatch):
         out = self._agent(monkeypatch, [self.CALL, {"content": "好的"}]).handle(
-            "回一下", user="u", member="MemberA")
+            "回一下", user="u", member="MemberA").text
         assert "PREVIEW" in out
 
-    def test_preview_cannot_smuggle_a_sentinel(self, monkeypatch):
+    def test_preview_text_cannot_attach_files(self, monkeypatch):
         out = self._agent(monkeypatch, [self.CALL, {"content": "好的"}]).handle(
             "回一下", user="u", member="MemberA")
-        assert ac.split_reply(out)[2] == []
+        assert out.docs == [] and out.images == []
 
     def test_preview_survives_llm_failure(self, monkeypatch):
         out = self._agent(monkeypatch, [self.CALL, None]).handle(
-            "回一下", user="u", member="MemberA")
+            "回一下", user="u", member="MemberA").text
         assert "PREVIEW" in out
 
 
@@ -358,7 +359,7 @@ class TestToolsRefuseWithoutMailBlock:
         assert at.tool_check_mail({"member": "MemberA"}).startswith("[错误]")
 
 
-# agent_core._apply_context 注入的本轮身份：起草一轮，确认必须落在紧接着的下一轮
+# skill_registry.Registry.arguments 注入的本轮身份：起草一轮，确认必须落在紧接着的下一轮
 TURN = {"__turn_id": 3, "__user": "u1"}
 NEXT_TURN = {"__turn_id": 4, "__user": "u1", "__text": "确认发送"}
 
@@ -592,7 +593,7 @@ class _WatchStub:
         self.history_status = history_status
         self.urls = []
 
-    def __call__(self, method, url, data=None, headers=None):
+    def __call__(self, method, url, data=None, headers=None, timeout=None):
         self.urls.append(url)
         if "/profile" in url:
             return 200, json.dumps({"historyId": self.profile_id}).encode()
@@ -610,21 +611,21 @@ class _WatchStub:
 
 class TestProviderHistory:
     def test_history_since_returns_inbox_additions_and_new_id(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(
             pages=[_hist([_added("m2"), _added("m3")], history_id="777")]))
         rows, hid = gp.history_since("100", PREFIX)
         assert [r["id"] for r in rows] == ["m2", "m3"]
         assert hid == "777"
 
     def test_non_inbox_and_duplicate_additions_are_dropped(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(pages=[_hist(
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(pages=[_hist(
             [_added("m2"), _added("m2"), _added("m9", labels=("SENT",)),
              _added("m8", labels=("INBOX", "TRASH"))])]))
         rows, _ = gp.history_since("100", PREFIX)
         assert [r["id"] for r in rows] == ["m2"]
 
     def test_pagination_is_followed(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(pages=[
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(pages=[
             _hist([_added("m2")], token="p1"), _hist([_added("m3")], history_id="888")]))
         rows, hid = gp.history_since("100", PREFIX)
         assert [r["id"] for r in rows] == ["m2", "m3"] and hid == "888"
@@ -633,42 +634,42 @@ class TestProviderHistory:
         monkeypatch.setattr(gp, "HISTORY_PAGES", 1)
         page = _hist([_added("m2")], history_id="999", token="p1")
         page["history"][0]["id"] = "150"
-        monkeypatch.setattr(gp, "_http", _WatchStub(pages=[page, _hist([_added("m3")])]))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(pages=[page, _hist([_added("m3")])]))
         rows, hid = gp.history_since("100", PREFIX)
         assert [r["id"] for r in rows] == ["m2"] and hid == "150"
 
     def test_metas_skip_deleted_messages_and_keep_order(self, monkeypatch):
         stub = _WatchStub()
-        monkeypatch.setattr(gp, "_http", lambda m, url, *a, **k: (
+        monkeypatch.setattr(google_oauth, "_http", lambda m, url, *a, **k: (
             (404, b"{}") if "/messages/gone" in url else stub(m, url, *a, **k)))
         metas = gp.message_metas(["m2", "gone", "m3"], PREFIX)
         assert [m["id"] for m in metas] == ["m2", "m3"]
 
     def test_get_messages_skip_deleted_and_keep_order_with_body(self, monkeypatch):
         stub = _WatchStub()
-        monkeypatch.setattr(gp, "_http", lambda m, url, *a, **k: (
+        monkeypatch.setattr(google_oauth, "_http", lambda m, url, *a, **k: (
             (404, b"{}") if "/messages/gone" in url else stub(m, url, *a, **k)))
         msgs = gp.get_messages(["m3", "gone", "m2"], PREFIX)
         assert [m["id"] for m in msgs] == ["m3", "m2"]
         assert "body" in msgs[0] and msgs[0]["subject"] == "Subj m3"
 
     def test_get_messages_other_errors_still_raise(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", lambda *a, **k: (500, b"{}"))
+        monkeypatch.setattr(google_oauth, "_http", lambda *a, **k: (500, b"{}"))
         with pytest.raises(RuntimeError):
             gp.get_messages(["m2"], PREFIX)
 
     def test_metas_other_errors_still_raise(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", lambda *a, **k: (500, b"{}"))
+        monkeypatch.setattr(google_oauth, "_http", lambda *a, **k: (500, b"{}"))
         with pytest.raises(RuntimeError):
             gp.message_metas(["m2"], PREFIX)
 
     def test_stale_start_id_reseeds_from_profile(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(profile_id="900", history_status=404))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(profile_id="900", history_status=404))
         rows, hid = gp.history_since("1", PREFIX)
         assert rows is None and hid == "900"
 
     def test_other_http_errors_still_raise(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(history_status=403))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(history_status=403))
         with pytest.raises(RuntimeError):
             gp.history_since("1", PREFIX)
 
@@ -703,7 +704,7 @@ class TestMailWatch:
         return ((gp, PREFIX), "") if pref else (None, "[错误] no mail")
 
     def _run(self, push, stub, monkeypatch, *, channel="wechat", now=None):
-        monkeypatch.setattr(gp, "_http", stub)
+        monkeypatch.setattr(google_oauth, "_http", stub)
         return mw.check_and_push(push, channel, provider_for=self._provider_for, now=now)
 
     def test_first_run_seeds_without_pushing(self, monkeypatch, sent):
@@ -784,7 +785,7 @@ class TestMailWatch:
         out, push = sent
         self._run(push, _WatchStub(profile_id="500"), monkeypatch)
         stub = _WatchStub(pages=[_hist([_added("gone"), _added("m3")], history_id="600")])
-        monkeypatch.setattr(gp, "_http", lambda m, url, *a, **k: (
+        monkeypatch.setattr(google_oauth, "_http", lambda m, url, *a, **k: (
             (404, b"{}") if "/messages/gone" in url else stub(m, url, *a, **k)))
         n = mw.check_and_push(push, "wechat", provider_for=self._provider_for,
                               now=time.time() + 100)
@@ -835,7 +836,7 @@ class TestMailWatch:
 
     def test_tick_runs_the_watch_off_the_caller_thread(self, monkeypatch, sent):
         out, push = sent
-        monkeypatch.setattr(gp, "_http", _WatchStub(profile_id="500"))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(profile_id="500"))
         threads = []
         assert mw.tick(push, "wechat", provider_for=self._provider_for,
                        spawn=lambda f: threads.append(f)) is True
@@ -1007,11 +1008,11 @@ class TestMailWatchFiltering:
         return ((gp, PREFIX), "")
 
     def _seed(self, push, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _WatchStub(profile_id="500"))
+        monkeypatch.setattr(google_oauth, "_http", _WatchStub(profile_id="500"))
         mw.check_and_push(push, "wechat", provider_for=self._provider_for)
 
     def _poll(self, push, stub, monkeypatch):
-        monkeypatch.setattr(gp, "_http", stub)
+        monkeypatch.setattr(google_oauth, "_http", stub)
         return mw.check_and_push(push, "wechat", provider_for=self._provider_for,
                                  now=time.time() + 100)
 
@@ -1137,7 +1138,7 @@ class TestMailWatchFiltering:
         out, push = sent
         self._seed(push, monkeypatch)
         stub = _WatchStub(pages=[_hist([_added("m2")], history_id="600")])
-        monkeypatch.setattr(gp, "_http", stub)
+        monkeypatch.setattr(google_oauth, "_http", stub)
         mw.check_and_push(lambda c, t: False, "wechat", provider_for=self._provider_for,
                           now=time.time() + 100)
         assert mw._load("wechat")["MemberA"]["history_id"] == "500" and len(llm.calls) == 1
@@ -1157,10 +1158,10 @@ class TestMuteTools:
         mw.last_push_path().unlink(missing_ok=True)
 
     def test_tools_are_registered_member_locked(self):
-        names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         for t in ("mail_last_push", "mail_rule"):
-            assert t in names and t in ac._MEMBER_LOCKED
-        assert "mail_last_push" in ac._UNTRUSTED_TOOLS
+            assert t in names and t in ac.REGISTRY.member_locked
+        assert "mail_last_push" in ac.REGISTRY.untrusted_tools
 
     def test_last_push_lists_what_was_broadcast(self):
         mw.record("MemberA", [{"id": "m2", "from": "Shop <d@shop.example>",
@@ -1194,7 +1195,7 @@ class TestMuteTools:
         assert "没有" in at.tool_mail_rules({"member": "MemberA"})
 
     def test_mail_rule_dispatches_actions(self):
-        tool = ac._TOOL_MAP["mail_rule"]
+        tool = ac.REGISTRY.tool_map["mail_rule"]
         out = tool({"member": "MemberA", "action": "always", "domain": "school.example"})
         assert "school.example" in out and mr.load("MemberA")[0]["push"] == "always"
         assert "school.example" in tool({"member": "MemberA", "action": "list"})
@@ -1249,7 +1250,7 @@ class TestAttachments:
     @pytest.fixture
     def pdf_stub(self, monkeypatch):
         s = _AttachStub([self._msg_with_pdf()], {"a1": b"%PDF-bytes"})
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         return s
 
@@ -1288,7 +1289,7 @@ class TestAttachments:
 
     def test_traversal_filename_stays_in_inbox(self, monkeypatch):
         s = _AttachStub([self._msg_with_pdf(filename="../../evil.pdf")], {"a1": b"%PDF"})
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         out = at.tool_download_attachment({"member": "MemberA", "id": "m1"})
         p = _paths.data_root() / out.splitlines()[0].strip()
@@ -1298,7 +1299,7 @@ class TestAttachments:
         s = _AttachStub([self._msg_with_pdf(filename="setup.exe",
                                             mime="application/octet-stream")],
                         {"a1": b"MZ"})
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         out = at.tool_download_attachment({"member": "MemberA", "id": "m1",
                                           "filename": "setup.exe"})
@@ -1307,23 +1308,23 @@ class TestAttachments:
 
     def test_refuses_oversize(self, monkeypatch):
         s = _AttachStub([self._msg_with_pdf(size=at.ATTACH_MAX_BYTES + 1)], {"a1": b"%PDF"})
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         out = at.tool_download_attachment({"member": "MemberA", "id": "m1"})
         assert out.startswith("[错误]")
         assert not any("/attachments/" in c[1] for c in s.calls)
 
     def test_no_attachment_says_so(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _AttachStub([_msg()], {}))
+        monkeypatch.setattr(google_oauth, "_http", _AttachStub([_msg()], {}))
         monkeypatch.setattr(at, "_provider", lambda member: ((gp, PREFIX), ""))
         out = at.tool_download_attachment({"member": "MemberA", "id": "m1"})
         assert out.startswith("[错误]") and "附件" in out
 
     def test_tool_registered_member_locked_and_untrusted(self):
-        names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         assert "download_attachment" in names
-        assert "download_attachment" in ac._TOOL_MAP
-        assert "download_attachment" in ac._MEMBER_LOCKED
+        assert "download_attachment" in ac.REGISTRY.tool_map
+        assert "download_attachment" in ac.REGISTRY.member_locked
 
 
 class _FilterStub:
@@ -1336,7 +1337,7 @@ class _FilterStub:
         self.scope_ok = scope_ok
         self.calls = []
 
-    def __call__(self, method, url, data=None, headers=None):
+    def __call__(self, method, url, data=None, headers=None, timeout=None):
         payload = json.loads(data) if data else None
         self.calls.append((method, url, payload))
         if not self.scope_ok and method != "GET":
@@ -1372,19 +1373,19 @@ class _FilterStub:
 class TestFilterProvider:
     def test_ensure_label_reuses_existing_case_insensitively(self, monkeypatch):
         s = _FilterStub(labels=["School"])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         assert gp.ensure_label("school", PREFIX) == "L0"
         assert not s.hit("POST", "/labels")
 
     def test_nested_label_creates_parent_first(self, monkeypatch):
         s = _FilterStub()
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         gp.ensure_label(" Family / Bills ", PREFIX)
         assert [c[2]["name"] for c in s.hit("POST", "/labels")] == ["Family", "Family/Bills"]
 
     def test_create_filter_labels_and_skips_inbox(self, monkeypatch):
         s = _FilterStub()
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         gp.create_filter({"from": "school.example", "to": "", "bogus": "x"}, "L9", True, PREFIX)
         body = s.hit("POST", "/settings/filters")[0][2]
         assert body == {"criteria": {"from": "school.example"},
@@ -1392,7 +1393,7 @@ class TestFilterProvider:
 
     def test_keep_in_inbox_omits_remove(self, monkeypatch):
         s = _FilterStub()
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         gp.create_filter({"subject": "bill"}, "L9", False, PREFIX)
         assert "removeLabelIds" not in s.hit("POST", "/settings/filters")[0][2]["action"]
 
@@ -1403,19 +1404,19 @@ class TestFilterProvider:
 
     def test_move_matching_batch_modifies(self, monkeypatch):
         s = _FilterStub(matches=["m1", "m2"])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         assert gp.move_matching("from:x", "L1", True, PREFIX) == 2
         body = s.hit("POST", "/messages/batchModify")[0][2]
         assert body == {"ids": ["m1", "m2"], "addLabelIds": ["L1"], "removeLabelIds": ["INBOX"]}
 
     def test_move_matching_nothing_skips_modify(self, monkeypatch):
         s = _FilterStub()
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         assert gp.move_matching("from:x", "L1", True, PREFIX) == 0
         assert not s.hit("POST", "/messages/batchModify")
 
     def test_old_token_raises_scope_error(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _FilterStub(scope_ok=False))
+        monkeypatch.setattr(google_oauth, "_http", _FilterStub(scope_ok=False))
         with pytest.raises(gp.ScopeError, match="--auth"):
             gp.ensure_label("School", PREFIX)
 
@@ -1431,7 +1432,7 @@ class TestFilterTools:
     @pytest.fixture
     def fstub(self, monkeypatch):
         s = _FilterStub(matches=["m1", "m2", "m3"])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         return s
 
     def _draft(self, **kw):
@@ -1442,11 +1443,11 @@ class TestFilterTools:
         return at.tool_apply_mail_filter({"member": "MemberA", **turn, "__text": "确认"})
 
     def test_registered_gated_and_shown(self):
-        names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         for t in ("draft_mail_filter", "apply_mail_filter", "mail_filters"):
-            assert t in names and t in ac._MEMBER_LOCKED
-        assert {"draft_mail_filter", "apply_mail_filter"} <= ac._CONTEXT_TOOLS
-        assert "draft_mail_filter" in ac._SHOW_TOOLS
+            assert t in names and t in ac.REGISTRY.member_locked
+        assert {"draft_mail_filter", "apply_mail_filter"} <= ac.REGISTRY.context_tools
+        assert "draft_mail_filter" in ac.REGISTRY.show_tools
 
     def test_draft_previews_without_touching_gmail_settings(self, fstub):
         out = self._draft()
@@ -1487,7 +1488,7 @@ class TestFilterTools:
         assert md.get("MemberA", at.FILTER_SLOT)["label"] == "学校"
 
     def test_scope_error_keeps_draft(self, monkeypatch):
-        monkeypatch.setattr(gp, "_http", _FilterStub(matches=["m1"], scope_ok=False))
+        monkeypatch.setattr(google_oauth, "_http", _FilterStub(matches=["m1"], scope_ok=False))
         self._draft()
         out = self._apply()
         assert out.startswith("[错误]") and "--auth" in out
@@ -1497,7 +1498,7 @@ class TestFilterTools:
         s = _FilterStub(labels=["学校"], filters=[{
             "id": "F0", "criteria": {"from": "school.example"},
             "action": {"addLabelIds": ["L0"], "removeLabelIds": ["INBOX"]}}])
-        monkeypatch.setattr(gp, "_http", s)
+        monkeypatch.setattr(google_oauth, "_http", s)
         out = at.tool_mail_filters({"member": "MemberA"})
         assert "1. 条件 from:school.example → 学校，不进收件箱" in out
         assert at.tool_mail_filters({"member": "MemberA", "remove": 2}).startswith("[错误]")

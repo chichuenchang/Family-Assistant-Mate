@@ -22,7 +22,6 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 if sys.platform == "win32":
@@ -37,8 +36,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); 
 
 import logging
 
-from agent_core import receipt_month_dir, member_inbox_dir, setup_logging
-from transport_base import Transport, stamp_name, with_quote as _with_quote
+from agent_core import setup_logging
+from transport_base import Transport, with_quote as _with_quote
 import paths as _paths
 
 log = logging.getLogger("familyassist.telegram")
@@ -75,8 +74,8 @@ def _api(method: str, data: dict | None = None) -> dict | None:
         return None
 
 
-def download_photo(file_id: str, member: str = "") -> Path | None:
-    """getFile 拿到路径后下载图片到发送成员的 inbox 暂存，返回保存路径。"""
+def _download(file_id: str, ext: str, member: str, what: str) -> Path | None:
+    """getFile 拿到路径后下载到发送成员的 inbox 暂存，返回保存路径。"""
     import urllib.request
     r = _api("getFile", {"file_id": file_id})
     if not r or not r.get("ok"):
@@ -85,39 +84,23 @@ def download_photo(file_id: str, member: str = "") -> Path | None:
     if not file_path:
         return None
     url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-    now = datetime.now()
-    staging = member_inbox_dir(member, now) if member else receipt_month_dir(now)
-    dest = staging / stamp_name("telegram", ".jpg", now)
+    dest = _TRANSPORT.inbox_path(member, ext)
     try:
         dest.write_bytes(urllib.request.urlopen(url, timeout=30).read())
         Transport.mark_dirty()
         return dest
     except Exception as e:
-        print(f"[tg] 图片下载失败: {e}", file=sys.stderr)
+        print(f"[tg] {what}下载失败: {e}", file=sys.stderr)
         return None
 
 
-def download_document(file_id: str, file_name: str, member: str = "") -> Path | None:
-    """下载 Telegram 文档（PDF）到发送成员 inbox，保留 .pdf 后缀。"""
-    import urllib.request
-    r = _api("getFile", {"file_id": file_id})
-    if not r or not r.get("ok"):
-        return None
-    file_path = r["result"].get("file_path", "")
-    if not file_path:
-        return None
-    url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-    now = datetime.now()
-    staging = member_inbox_dir(member, now) if member else receipt_month_dir(now)
-    # 仅 PDF 走此函数（调用方已判定）；强制 .pdf，确保 ocr_image 走 PDF 分支
-    dest = staging / stamp_name("telegram", ".pdf", now)
-    try:
-        dest.write_bytes(urllib.request.urlopen(url, timeout=30).read())
-        Transport.mark_dirty()
-        return dest
-    except Exception as e:
-        print(f"[tg] 文档下载失败: {e}", file=sys.stderr)
-        return None
+def download_photo(file_id: str, member: str) -> Path | None:
+    return _download(file_id, ".jpg", member, "图片")
+
+
+def download_document(file_id: str, file_name: str, member: str) -> Path | None:
+    """仅 PDF 走此函数（调用方已判定）；强制 .pdf，确保 ocr_image 走 PDF 分支。"""
+    return _download(file_id, ".pdf", member, "文档")
 
 
 def send_message(chat_id: int | str, text: str) -> bool:
@@ -234,11 +217,6 @@ class TelegramTransport(Transport):
 
 
 _TRANSPORT = TelegramTransport()
-
-
-def _send_reply(chat_id, reply: str) -> None:
-    """拆出图片/文档哨兵：先发图，再发文档，最后发文字（transport_base.deliver）。"""
-    _TRANSPORT.deliver(chat_id, reply)
 
 
 # ── 主循环 ──────────────────────────────────────────────────

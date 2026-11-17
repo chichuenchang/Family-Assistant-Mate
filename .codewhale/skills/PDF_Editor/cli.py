@@ -68,7 +68,7 @@ def _session_for_file(file: str, member: str, fresh: bool = False) -> dict:
 
 def _latest_or_die(member: str, why: str) -> tuple[dict, str]:
     """LLM 跨消息容易忘掉/编造会话 id：兜底接续该成员最近的会话。
-    返回 (会话, 提示)；提示由调用方印在路径行之后（stdout 首行=路径，哨兵契约；
+    返回 (会话, 提示)；提示由调用方印在路径行之后（stdout 首行=路径，DOC_TOOLS 契约；
     stderr 在成功时被 run_cli 丢掉，Agent 看不到）。"""
     sessions = pdf_plan.list_sessions(member)
     if not sessions:
@@ -152,7 +152,7 @@ def cmd_edit(args):
     plan["out"] = _paths.to_rel(out)
     pdf_plan.save(plan)
     _mark_backup_dirty()
-    print(plan["out"])                           # 第一行 = 路径（哨兵契约）
+    print(plan["out"])                           # 第一行 = 路径（DOC_TOOLS 契约）
     print(f"session={plan['id']}")
     if notice:
         print(f"提示: {notice}")

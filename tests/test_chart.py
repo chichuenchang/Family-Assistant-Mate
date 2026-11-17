@@ -1,4 +1,4 @@
-# tests/test_chart.py — Note_Keeper 可视化（chart.py）+ 投递（split_reply）测试
+# tests/test_chart.py — Note_Keeper 可视化（chart.py）测试
 import json
 import os
 import subprocess
@@ -122,21 +122,6 @@ def test_cli_chart_render(data_root):
 def test_cli_chart_bad_json(data_root):
     r = _cli(data_root, "chart-render", "--member", "爸爸", "--spec", "{bad")
     assert r.returncode == 1
-
-
-# ── Task 4: split_reply ─────────────────────────────────────
-
-def test_split_reply():
-    import agent_core as ac
-    text, imgs, docs = ac.split_reply("hello\n" + ac.IMG_SENTINEL + "Family/charts/a.png")
-    assert text == "hello" and imgs == ["Family/charts/a.png"] and docs == []
-    # multiple
-    r = "line1\nline2\n" + ac.IMG_SENTINEL + "a.png\n" + ac.IMG_SENTINEL + "b.png"
-    text, imgs, docs = ac.split_reply(r)
-    assert text == "line1\nline2" and imgs == ["a.png", "b.png"] and docs == []
-    # no image — passthrough
-    text, imgs, docs = ac.split_reply("just text")
-    assert text == "just text" and imgs == [] and docs == []
 
 
 # ── Task 6: backup excludes charts/ ─────────────────────────

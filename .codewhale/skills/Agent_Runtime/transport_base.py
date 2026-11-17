@@ -166,7 +166,6 @@ class Transport:
     # ── 投递 ────────────────────────────────────────────────
     def deliver(self, target, reply: Reply) -> None:
         """先发图，再发文档，最后发文字。单件失败仅记录，不影响其余。"""
-        text = reply.text
         for rel in reply.images:
             ap = sendable(rel)
             if ap:
@@ -181,9 +180,9 @@ class Transport:
                     self.send_document(target, str(ap))
                 except Exception:
                     log.exception("发送文件失败（跳过）: %s", rel)
-        if text:
-            self.send_text(target, text)
-            self.after_text_sent(target, text)
+        if reply.text:
+            self.send_text(target, reply.text)
+            self.after_text_sent(target, reply.text)
 
     def _safe_send(self, target, text: str) -> None:
         try:

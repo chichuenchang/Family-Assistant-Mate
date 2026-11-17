@@ -28,7 +28,7 @@ def _no_real_gmail(monkeypatch):
             monkeypatch.delenv(k, raising=False)
     for v in ("CLIENT_ID", "CLIENT_SECRET", "REFRESH_TOKEN"):
         monkeypatch.setenv(f"{PREFIX}_{v}", "fake")
-    gp._accounts.clear()
+    gp._account.cache_clear()
     monkeypatch.setattr(google_oauth.GoogleAccount, "token", lambda self: "fake-access")
 
 

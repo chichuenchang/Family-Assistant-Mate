@@ -22,7 +22,6 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 if sys.platform == "win32":
@@ -38,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); 
 import logging
 
 from agent_core import setup_logging
-from transport_base import Transport, stamp_name, with_quote as _with_quote
+from transport_base import Transport, with_quote as _with_quote
 import paths as _paths
 
 log = logging.getLogger("familyassist.telegram")
@@ -76,7 +75,7 @@ def _api(method: str, data: dict | None = None) -> dict | None:
 
 
 def _download(file_id: str, ext: str, member: str, what: str) -> Path | None:
-    """getFile 拿到路径后下载到发送成员的 inbox 暂存（无成员 → Family/receipts），返回保存路径。"""
+    """getFile 拿到路径后下载到发送成员的 inbox 暂存，返回保存路径。"""
     import urllib.request
     r = _api("getFile", {"file_id": file_id})
     if not r or not r.get("ok"):
@@ -85,10 +84,7 @@ def _download(file_id: str, ext: str, member: str, what: str) -> Path | None:
     if not file_path:
         return None
     url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-    now = datetime.now()
-    staging = (_paths.member_inbox_dir(member, now) if member
-               else _paths.family_receipts_dir(now))
-    dest = staging / stamp_name("telegram", ext, now)
+    dest = _TRANSPORT.inbox_path(member, ext)
     try:
         dest.write_bytes(urllib.request.urlopen(url, timeout=30).read())
         Transport.mark_dirty()
@@ -98,11 +94,11 @@ def _download(file_id: str, ext: str, member: str, what: str) -> Path | None:
         return None
 
 
-def download_photo(file_id: str, member: str = "") -> Path | None:
+def download_photo(file_id: str, member: str) -> Path | None:
     return _download(file_id, ".jpg", member, "图片")
 
 
-def download_document(file_id: str, file_name: str, member: str = "") -> Path | None:
+def download_document(file_id: str, file_name: str, member: str) -> Path | None:
     """仅 PDF 走此函数（调用方已判定）；强制 .pdf，确保 ocr_image 走 PDF 分支。"""
     return _download(file_id, ".pdf", member, "文档")
 

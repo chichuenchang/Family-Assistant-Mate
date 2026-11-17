@@ -32,6 +32,7 @@ messages.batchModify，不删信。旧 token 缺后两个 scope → 403，抛 Sc
 from __future__ import annotations
 
 import base64
+import functools
 import html
 import mimetypes
 import os
@@ -76,15 +77,10 @@ class ScopeError(ApiError):
     """token 授权时没给过滤器所需 scope（旧 token）——要重跑 --auth。"""
 
 
-_accounts: dict[str, google_oauth.GoogleAccount] = {}   # prefix → 账号（各持自己的 token 缓存）
-
-
+@functools.cache
 def _account(prefix: str) -> google_oauth.GoogleAccount:
-    acct = _accounts.get(prefix)
-    if acct is None:
-        acct = _accounts[prefix] = google_oauth.GoogleAccount(
-            prefix, timeout=TIMEOUT_S, label="Gmail")
-    return acct
+    """prefix → 账号（各持自己的 token 缓存）。"""
+    return google_oauth.GoogleAccount(prefix, timeout=TIMEOUT_S, label="Gmail")
 
 
 def is_configured(prefix: str = DEFAULT_PREFIX) -> bool:

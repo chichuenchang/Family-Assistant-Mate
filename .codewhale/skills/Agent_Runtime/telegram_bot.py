@@ -309,7 +309,7 @@ def run() -> None:
     if not TOKEN:
         print("[tg] 未设置 TELEGRAM_BOT_TOKEN。")
         print("  1. Telegram 搜 @BotFather → /newbot")
-        print("  2. setx TELEGRAM_BOT_TOKEN \"你的token\"")
+        print("  2. .codewhale/.env 填 TELEGRAM_BOT_TOKEN=你的token")
         return
 
     # 启动时验证 Token

@@ -17,6 +17,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import project_env  # Agent_Runtime, on sys.path via bootstrap
+
 CAP = 6000              # max chars handed back to the LLM (DeepSeek max_tokens is tight)
 _TRUNC = "…[截断]"
 _TIMEOUT = 25           # under _run_cli's 30s subprocess cap
@@ -224,25 +226,8 @@ def fetch_images(query, *, call, download, dest_dir, count=None, fallback=None,
 # ── network adapter (real I/O; injected into the pure logic by cli.py) ──
 
 def _load_env():
-    """Load ANYSEARCH_API_KEY from the skill-dir .env (utf-8-sig for Notepad BOM).
-
-    Does NOT override an already-set process env var — env var wins, matching the
-    documented priority (env var > .env file > anonymous)."""
-    env_path = Path(__file__).resolve().parent / ".env"
-    if not env_path.is_file():
-        return
-    try:
-        for line in env_path.read_text(encoding="utf-8-sig").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, _, v = line.partition("=")
-            k = k.strip().lstrip("﻿")
-            v = v.strip().strip("\"'").strip()
-            if k and v and not os.environ.get(k):
-                os.environ[k] = v
-    except OSError:
-        pass
+    """Skill-dir .env fallback; process env (incl. .codewhale/.env) wins."""
+    project_env.load(Path(__file__).resolve().parent / ".env", override=False)
 
 
 def _api_key():

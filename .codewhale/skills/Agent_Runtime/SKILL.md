@@ -177,9 +177,11 @@ YouTube/X/Reddit/TikTok/Instagram/Bilibili/Zhihu 搜集"大家在怎么说"，�
 - **成员注册表**：`data/members.json`（git 不跟踪 — 姓名/频道 id 属隐私）只在本机用 `Expense_Tracker/cli.py member-add/list/remove` 管理（成员命令挂在记账 CLI 上，非本目录；不在命令白名单内，Agent 调不到）。未注册频道 id 一律静默丢弃；写入类账目的归属由 `skill_registry.Registry.arguments` 注入解析出的成员名，LLM 给的 member 一律剥离（防冒名）。
 - **外部内容围栏**：非本地来源文本经 `tool_runtime.fence` 才进 LLM——manifest `UNTRUSTED_TOOLS` 的工具结果、来件 OCR、引用消息。软防线：降低注入命中率，不限制损害；备忘/工作表/成员资料（本地库）未套。
 - **凭据本地化**：所有频道凭据（微信扫码态、Telegram token）只存本地，不外传。
-- Telegram token 走环境变量，不写进仓库。
+- 密钥全在 `.codewhale/.env`（gitignore），不写进仓库。
 
 ## 环境变量
+
+均可填 `.codewhale/.env`：`bootstrap` 经 `project_env.load()` 读入，非空值覆盖 Windows 环境变量（残留 `setx` 不遮文件）。键名清单 `.codewhale/.env.example`。
 
 | 变量 | 用途 | 必需 |
 |------|------|------|

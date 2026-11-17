@@ -57,7 +57,7 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 
 ## Google 凭据丢失
 
-步骤见 [Remote Backup SKILL.md](.codewhale/skills/Remote_Backup/SKILL.md)「凭据丢失」。Claude 代跑时：auto 模式分类器拒 Claude 复制凭据环境变量，给用户 PowerShell 块自贴 secret；浏览器、`--auth`、`backup-now`/`backup-verify` 由 Claude 跑，用户只贴 secret、点 Allow。
+步骤见 [Remote Backup SKILL.md](.codewhale/skills/Remote_Backup/SKILL.md)「凭据丢失」。Claude 代跑时：auto 模式分类器拒 Claude 复制凭据环境变量，给用户 PowerShell 块自贴 secret；其余步骤 Claude 跑，用户只点 Allow。
 
 ## 成员注册（仅本机）
 

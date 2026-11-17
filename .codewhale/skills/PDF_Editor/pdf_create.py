@@ -15,19 +15,17 @@ import re
 import shutil
 import subprocess
 import tempfile
-import uuid
-from datetime import datetime
 from html import escape
 from pathlib import Path
 from typing import Callable
 
 import paths as _paths
+import pdf_plan
 
 CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"
 PREVIEW_SCALE = 1.5          # A4 → 约 890×1260 px，聊天里看得清
 RENDER_TIMEOUT = 60
 TITLE_MAX = 60
-_ID_RE = re.compile(r"[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")   # 同 pdf_plan 会话 id
 
 _HEAD_META = (f'<meta charset="utf-8">'
               f'<meta http-equiv="Content-Security-Policy" content="{CSP}">')
@@ -187,11 +185,5 @@ def safe_title(title: str) -> str:
     return t or "document"
 
 
-def new_session_id() -> str:
-    return datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4]
-
-
 def session_dir(member: str, session_id: str) -> Path:
-    if not _ID_RE.fullmatch(session_id or ""):
-        raise ValueError(f"非法会话 id: {session_id}")
-    return _paths.member_pdf_creates_dir(member) / session_id
+    return _paths.member_pdf_creates_dir(member) / pdf_plan.check_session_id(session_id)

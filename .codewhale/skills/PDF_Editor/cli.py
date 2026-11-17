@@ -175,7 +175,7 @@ def _create_session(member: str, sid: str) -> tuple[Path, dict, str]:
                 return d, json.loads((d / "meta.json").read_text(encoding="utf-8")), ""
         except (ValueError, OSError, json.JSONDecodeError):
             pass
-    new = pdf_create.new_session_id()
+    new = pdf_plan.new_session_id()
     d = pdf_create.session_dir(member, new)
     d.mkdir(parents=True, exist_ok=True)
     notice = f"会话 {sid} 不存在，已新建 {new}" if sid else ""

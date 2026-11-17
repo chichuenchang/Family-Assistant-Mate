@@ -136,7 +136,7 @@ def test_session_dir_rejects_bad_id(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path / "data"))
     with pytest.raises(ValueError):
         pdf_create.session_dir("jim", "../evil")
-    sid = pdf_create.new_session_id()
+    sid = pdf_create.pdf_plan.new_session_id()
     assert pdf_create.session_dir("jim", sid).as_posix().endswith(f"jim/pdf_creates/{sid}")
 
 

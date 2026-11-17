@@ -32,14 +32,16 @@ _ID_RE = re.compile(r"[0-9]{8}_[0-9]{6}_[0-9a-f]{4}")   # 同 pdf_plan 会话 id
 _HEAD_META = (f'<meta charset="utf-8">'
               f'<meta http-equiv="Content-Security-Policy" content="{CSP}">')
 _SCRIPT_RE = re.compile(r"<script\b.*?(?:</script\s*>|$)", re.I | re.S)
-# 一切 http-equiv 都剥：值可用实体编码（&#114;efresh）绕过按值匹配；CSP 由我们自己注入
-_HTTP_EQUIV_RE = re.compile(r"<meta\b[^>]*http-equiv[^>]*>", re.I)
 _ATTRS = r"""(?:"[^"]*"|'[^']*'|[^'">])*"""     # 标签体：引号里的 > 不结束标签
+# meta/base 一律剥（charset/CSP 自注入）。正则与浏览器分词必有出入（x=a' 这类未配对引号匹配不上），
+# 剥不掉的残缺开头转义成文本：浏览器只认字面 "<meta"，没了它就造不出标签
+_NAV = r"(meta|base)(?=[\s/>]|$)"
+_NAV_TAG_RE = re.compile(rf"<{_NAV}{_ATTRS}>", re.I)
+_NAV_OPEN_RE = re.compile(rf"<{_NAV}", re.I)
 _SHELL_RE = re.compile(rf"<!doctype[^>]*>|<(?:html|head)(?=[\s/>]){_ATTRS}>", re.I)
 _HTML_TAG_RE = re.compile(rf"<html(?=[\s/>]){_ATTRS}>", re.I)
 _KEEP_ATTR_RE = re.compile(r"""\b(lang|dir)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))""", re.I)
-_BASE_RE = re.compile(r"<base\b[^>]*>", re.I)
-_IMG_RE = re.compile(r"<img\b[^>]*>", re.I)
+_IMG_RE = re.compile(rf"<img(?=[\s/>]){_ATTRS}>", re.I)
 _SRC_RE = re.compile(r"""\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
 _SRCSET_RE = re.compile(r"""\s\bsrcset\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
 _URL_RE = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"]*?))\s*\)""", re.I)
@@ -77,8 +79,8 @@ def sanitize(html: str, resolve_src: Callable[[str], str | None]) -> tuple[str, 
     warns: list[str] = []
     html = html.replace("﻿", "")    # 壳重建后 BOM 落进 head 成文本 → 页顶白条
     html = _SCRIPT_RE.sub("", html)
-    html = _HTTP_EQUIV_RE.sub("", html)
-    html = _BASE_RE.sub("", html)
+    html = _NAV_TAG_RE.sub("", html)
+    html = _NAV_OPEN_RE.sub(r"&lt;\1", html)
 
     def img(m):
         tag = _SRCSET_RE.sub("", m.group(0))

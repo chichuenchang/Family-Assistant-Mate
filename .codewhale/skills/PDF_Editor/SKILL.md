@@ -37,7 +37,7 @@
 - DeepSeek `deepseek-flash` 收图（`input_modalities` 含 image），认得出表格结构，但给框偏 50–150px，0–1000 归一化更差；每页 ~65s、16k 推理 token。不用它定位。
 - 无头浏览器必须带独立 `--user-data-dir`：共用 profile 时任务交给已在跑的浏览器。Edge 157 实测单页 ~3s。
 - 浏览器默认在页眉页脚印 URL + 日期：`--no-pdf-header-footer` 关（新版 Chromium 旗标名）。
-- CSP 管不到导航：`<meta http-equiv=refresh>` / `<base>` 能把页面带到 `file:///` 把本机文件印进 PDF。剥掉**一切** http-equiv（值可写 `&#114;efresh` 绕过按值匹配）。
+- CSP 管不到导航：`<meta http-equiv=refresh>` / `<base>` 能把页面带到 `file:///` 把本机文件印进 PDF。剥掉**一切** meta/base（http-equiv 值可写 `&#114;efresh` 绕过按值匹配；引号里的 `>`、未配对引号让 `[^>]*` 正则漏剥 → 残缺开头转义成文本，见 `_NAV_OPEN_RE`）。
 - CSP 不能找原 `<head>` 插：注释/`<title>` 里的假 `<head>` 让 CSP 成文本失效（iframe 即可读本机文件）。故重建壳 `<!doctype><html lang/dir><head>CSP…`（原属性不搬：引号吞 CSP，见 `_inject_head`）；BOM 须先删，否则落进 head 成文本、页顶白条。
 - LLM 忘/编会话 id 是常态：`pdf-edit` 兜底接续最近会话，提示走 stderr（stdout 首行是路径，DOC_TOOLS 契约）。
 

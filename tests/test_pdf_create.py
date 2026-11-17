@@ -81,6 +81,20 @@ def test_csp_first_even_with_decoy_head(tmp_path):
     assert out.startswith('<!doctype html><html lang="zh"><head>')
 
 
+@pytest.mark.parametrize("tag", [
+    '<meta content="0;url=file:///C:/x.txt" data-x=">" http-equiv="refresh">',   # 引号内 >
+    "<meta x=a' http-equiv=refresh content=\"0;url=file:///C:/x.txt\">",       # 未配对引号
+    "<BASE x=a' href=\"file:///C:/\">",
+    '<meta name="viewport" content="width=device-width">',
+])
+def test_every_meta_and_base_neutralized(tmp_path, tag):
+    out, _ = pdf_create.sanitize(f"<head>{tag}</head><p>x</p><meta-card>ok</meta-card>",
+                                 _resolver(tmp_path))
+    low = out.lower()
+    assert low.count("<meta ") == 2 and "<meta-card>" in low     # 只剩自注入 charset + CSP
+    assert "<base" not in low
+
+
 def test_html_attr_quote_cannot_swallow_csp(tmp_path):
     out, _ = pdf_create.sanitize("<html lang='zh\"><b' x='>'><p>y</p>", _resolver(tmp_path))
     assert out.startswith('<!doctype html><html lang="zh&quot;&gt;&lt;b"><head><meta charset')

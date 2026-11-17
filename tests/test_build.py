@@ -84,6 +84,18 @@ def test_check_passes_clean_tree(repo):
     assert build.check(repo) == []
 
 
+def test_check_fails_when_pyflakes_unavailable(repo, monkeypatch):
+    real = build._run
+
+    def no_pyflakes(args, cwd):
+        if "pyflakes" in args:
+            return subprocess.CompletedProcess(args, 1, "", "No module named pyflakes\n")
+        return real(args, cwd)
+
+    monkeypatch.setattr(build, "_run", no_pyflakes)
+    assert any("pyflakes" in line for line in build.check(repo))
+
+
 # ── Task 2: snapshot / latest / main ───────────────────────
 
 STAMP = "20990101-120000"

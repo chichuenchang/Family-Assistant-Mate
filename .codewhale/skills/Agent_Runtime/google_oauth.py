@@ -35,6 +35,15 @@ class GoogleApiError(RuntimeError):
         self.body = body
 
 
+class GoogleAuthError(RuntimeError):
+    """refresh token 换 access token 失败。不是 GoogleApiError：调用方按 API 码分流
+    （如 404 略过）时不得误吞授权失败。"""
+
+    def __init__(self, status: int, msg: str):
+        super().__init__(msg)
+        self.status = status
+
+
 def _http(method: str, url: str, data: bytes | None = None,
           headers: dict | None = None, timeout: int = DEFAULT_TIMEOUT) -> tuple[int, bytes]:
     """唯一 HTTP 出口（测试在此打桩）。返回 (status, body)，HTTP 错误不抛。"""
@@ -78,7 +87,7 @@ class GoogleAccount:
         }).encode()
         status, body = _http("POST", TOKEN_URL, data, _FORM, self.timeout)
         if status != 200:
-            raise GoogleApiError(status, f"Google OAuth token 刷新失败 {status}: {body[:200]!r}", body)
+            raise GoogleAuthError(status, f"Google OAuth token 刷新失败 {status}: {body[:200]!r}")
         tok = json.loads(body)
         self._access = tok["access_token"]
         self._exp = time.time() + int(tok.get("expires_in", 3600)) - 60

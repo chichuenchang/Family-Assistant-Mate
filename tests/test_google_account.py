@@ -4,7 +4,7 @@ import json
 import pytest
 
 import google_oauth
-from google_oauth import GoogleAccount, GoogleApiError
+from google_oauth import GoogleAccount, GoogleApiError, GoogleAuthError
 
 PREFIX = "TESTACCT"
 
@@ -55,10 +55,11 @@ def test_token_refreshes_again_inside_last_minute(http):
 
 def test_token_failure_raises_with_status(http):
     _, replies = http
-    replies.append((401, b'{"error":"invalid_grant"}'))
-    with pytest.raises(GoogleApiError, match="token 刷新失败") as e:
+    replies.append((404, b'{"error":"invalid_grant"}'))
+    with pytest.raises(GoogleAuthError, match="token 刷新失败") as e:
         GoogleAccount(PREFIX).token()
-    assert e.value.status == 401
+    assert e.value.status == 404
+    assert not isinstance(e.value, GoogleApiError)   # API 404 分流不得吞授权失败
 
 
 def test_accounts_do_not_share_tokens(http):

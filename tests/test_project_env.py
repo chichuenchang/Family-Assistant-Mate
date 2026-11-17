@@ -1,7 +1,18 @@
 """project_env：.codewhale/.env 读入 os.environ（文件优先）、upsert、Windows 迁移。"""
 import os
 
+import pytest
+
 import project_env
+
+
+@pytest.fixture(autouse=True)
+def _restore_environ():
+    """load/set_key/import_windows 写 os.environ：每测后还原，键不漏进别的测试。"""
+    saved = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(saved)
 
 
 def test_parse_bom_comments_quotes():
@@ -17,29 +28,24 @@ def test_load_overrides_env(tmp_path, monkeypatch):
     assert project_env.load(f) == ["FAM_T_KEY"]
     assert os.environ["FAM_T_KEY"] == "from_file"
     assert os.environ["FAM_T_EMPTY"] == "kept"      # 空值不覆盖
-    monkeypatch.delenv("FAM_T_KEY")
 
 
 def test_load_missing_file_noop(tmp_path):
     assert project_env.load(tmp_path / "nope.env") == []
 
 
-def test_set_key_creates_file(tmp_path, monkeypatch):
+def test_set_key_creates_file(tmp_path):
     f = tmp_path / "sub" / ".env"
-    monkeypatch.delenv("FAM_T_NEW", raising=False)
     assert project_env.set_key("FAM_T_NEW", "v1", f) == f
     assert project_env.parse(f.read_text(encoding="utf-8")) == {"FAM_T_NEW": "v1"}
     assert os.environ["FAM_T_NEW"] == "v1"
-    monkeypatch.delenv("FAM_T_NEW")
 
 
-def test_set_key_replaces_in_place(tmp_path, monkeypatch):
+def test_set_key_replaces_in_place(tmp_path):
     f = tmp_path / ".env"
     f.write_text("# head\nA=1\nFAM_T_X=old\nB=2\n", encoding="utf-8")
-    monkeypatch.delenv("FAM_T_X", raising=False)
     project_env.set_key("FAM_T_X", "new", f)
     assert f.read_text(encoding="utf-8") == "# head\nA=1\nFAM_T_X=new\nB=2\n"
-    monkeypatch.delenv("FAM_T_X")
 
 
 def test_env_path_override(tmp_path, monkeypatch):

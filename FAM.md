@@ -3,7 +3,7 @@
 > 个人/家庭多功能助手。技能拆分为独立 skill；本文档与各 SKILL.md 面向开发者，
 > 运行时 Agent 不读取它们（见下"运行时提示词"）。
 >
-> 原名 Family Assistant，2026-11-16 改名 FAM。仍用旧名（改动需手动迁移）：仓库目录 `FamilyAssistant/`（决定 `<repo>-builds/`）、conda env `familyassis310`、Drive 备份根 `remote_root` 默认 `"FamilyAssistant"`（改则恢复找不到旧备份）。日志器 `familyassist.*` 改为 `fam.*`。
+> 原名 Family Assistant。仍用旧名（改动需手动迁移）：仓库目录 `FamilyAssistant/`（决定 `<repo>-builds/`）、conda env `familyassis310`、Drive 备份根 `remote_root` 默认 `"FamilyAssistant"`（改则恢复找不到旧备份）。
 
 ## 可用技能
 

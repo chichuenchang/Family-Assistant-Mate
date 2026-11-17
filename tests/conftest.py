@@ -13,6 +13,9 @@ _SESSION_DATA_ROOT = tempfile.mkdtemp(prefix="fa_test_data_")
 os.environ["DATA_ROOT"] = _SESSION_DATA_ROOT
 atexit.register(shutil.rmtree, _SESSION_DATA_ROOT, ignore_errors=True)
 
+# 真 .codewhale/.env 不进测试：bootstrap 会 load() 它。
+os.environ["FAM_ENV_FILE"] = os.path.join(_SESSION_DATA_ROOT, "no.env")
+
 # 全部 skill 目录经 Agent_Runtime/bootstrap 一次挂上。
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".codewhale" / "skills" / "Agent_Runtime"))
 import bootstrap  # noqa: E402,F401

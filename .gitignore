@@ -21,6 +21,10 @@ __pycache__/
 **/Calendar_Keeper/*.pickle
 client_secret*.json
 
+# 项目密钥文件（project_env.py），绝不入库；.env.example 入库
+.codewhale/.env
+.codewhale/.env.tmp
+
 # AnySearch API key（仅环境变量或 gitignore 的 .env，绝不入库）
 **/Any_Search/.env
 **/Web_Reach/.env

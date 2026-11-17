@@ -137,8 +137,9 @@ def prune(builds: Path, keep: int = 5) -> list[str]:
     return [p.name for p in stamps[:-keep] + junk if not remove_snapshot(p)]
 
 
-def make_snapshot(root: Path, builds: Path, stamp: str) -> Path:
-    """Copy into <stamp>.tmp, link data, write BUILD.json, rename. Fail = nothing left."""
+def make_snapshot(root: Path, builds: Path, stamp: str, state: dict) -> Path:
+    """Copy into <stamp>.tmp, link data, write BUILD.json (id + `git_state`), rename.
+    Fail = nothing left."""
     final = builds / stamp
     if final.exists():
         raise BuildError(f"build {stamp} exists")
@@ -151,7 +152,7 @@ def make_snapshot(root: Path, builds: Path, stamp: str) -> Path:
             shutil.copy2(root / rel, dest)
         _link_data(root, tmp)
         (tmp / "BUILD.json").write_text(
-            json.dumps({"id": stamp, **git_state(root)}, ensure_ascii=False, indent=1),
+            json.dumps({"id": stamp, **state}, ensure_ascii=False, indent=1),
             encoding="utf-8")
         tmp.rename(final)
     except BaseException:
@@ -188,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"WARNING dirty: {len(state['dirty_files'])} uncommitted — commit when ready",
               *(f"  {f}" for f in state["dirty_files"]), sep="\n")
     try:
-        snap = make_snapshot(ROOT, builds, datetime.now().strftime(STAMP_FMT))
+        snap = make_snapshot(ROOT, builds, datetime.now().strftime(STAMP_FMT), state)
     except BuildError as e:
         print(f"BUILD FAILED: {e}")
         return 1

@@ -106,13 +106,17 @@ def test_gate_fails_when_pyflakes_unavailable(repo, monkeypatch):
 STAMP = "20990101-120000"
 
 
+def _snap(root: Path, builds: Path, stamp: str) -> Path:
+    return build.make_snapshot(root, builds, stamp, build.git_state(root))
+
+
 @pytest.fixture
 def builds(tmp_path) -> Path:
     return tmp_path / "builds"
 
 
 def test_snapshot_layout(repo, builds):
-    snap = build.make_snapshot(repo, builds, STAMP)
+    snap = _snap(repo, builds, STAMP)
     assert snap == builds / STAMP
     assert (snap / ".codewhale/skills/X/cli.py").is_file()
     assert (snap / "config.json").is_file()
@@ -124,27 +128,27 @@ def test_snapshot_layout(repo, builds):
 
 
 def test_snapshot_isolated_from_edits(repo, builds):
-    snap = build.make_snapshot(repo, builds, STAMP)
+    snap = _snap(repo, builds, STAMP)
     _write(repo, ".codewhale/skills/X/cli.py", "print('edited')\n")
     assert (snap / ".codewhale/skills/X/cli.py").read_text() == "print('hi')\n"
 
 
 def test_existing_stamp_raises(repo, builds):
-    snap = build.make_snapshot(repo, builds, STAMP)
+    snap = _snap(repo, builds, STAMP)
     with pytest.raises(build.BuildError):
-        build.make_snapshot(repo, builds, STAMP)
+        _snap(repo, builds, STAMP)
     assert (snap / "BUILD.json").is_file()
 
 
 def test_missing_data_raises_no_leftover(repo, builds):
     shutil.rmtree(repo / "data")
     with pytest.raises(build.BuildError):
-        build.make_snapshot(repo, builds, STAMP)
+        _snap(repo, builds, STAMP)
     assert not builds.exists() or not any(builds.iterdir())
 
 
 def test_latest_ignores_tmp_and_incomplete(repo, builds):
-    real = build.make_snapshot(repo, builds, STAMP)
+    real = _snap(repo, builds, STAMP)
     (builds / "20990101-130000.tmp").mkdir()
     (builds / "20990101-130001").mkdir()          # no BUILD.json
     assert build.latest(builds) == real
@@ -177,7 +181,7 @@ def test_main_builds_and_warns_dirty(repo, builds, monkeypatch, capsys):
 # ── Task 3: safe removal / prune ───────────────────────────
 
 def test_remove_keeps_live_data(repo, builds):
-    snap = build.make_snapshot(repo, builds, STAMP)
+    snap = _snap(repo, builds, STAMP)
     assert build.remove_snapshot(snap) is True
     assert not snap.exists() and not snap.with_name(snap.name + ".del").exists()
     assert (repo / "data" / "f.txt").read_text() == "live"
@@ -194,7 +198,7 @@ def _hold(snap: Path) -> subprocess.Popen:
 
 
 def test_remove_skips_in_use(repo, builds):
-    snap = build.make_snapshot(repo, builds, STAMP)
+    snap = _snap(repo, builds, STAMP)
     proc = _hold(snap)
     try:
         assert build.remove_snapshot(snap) is False
@@ -209,7 +213,7 @@ def test_remove_skips_in_use(repo, builds):
 def test_prune_keeps_newest_five(repo, builds):
     stamps = [f"20990101-12000{i}" for i in range(7)]
     for s in stamps:
-        build.make_snapshot(repo, builds, s)
+        _snap(repo, builds, s)
     crashed = builds / "20990101-130000.tmp"
     crashed.mkdir()
     subprocess.run(["cmd", "/c", "mklink", "/J", str(crashed / "data"), str(repo / "data")],
@@ -222,7 +226,7 @@ def test_prune_keeps_newest_five(repo, builds):
 def test_prune_reports_in_use(repo, builds):
     stamps = [f"20990101-12000{i}" for i in range(6)]
     for s in stamps:
-        build.make_snapshot(repo, builds, s)
+        _snap(repo, builds, s)
     proc = _hold(builds / stamps[0])
     try:
         assert build.prune(builds) == [stamps[0]]

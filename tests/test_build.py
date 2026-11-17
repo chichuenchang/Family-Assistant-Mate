@@ -70,26 +70,26 @@ def test_git_state_clean_then_dirty(repo):
     assert ".codewhale/skills/X/cli.py" in st["dirty_files"]
 
 
-def test_check_flags_syntax_error(repo):
+def test_gate_flags_syntax_error(repo):
     _write(repo, ".codewhale/skills/X/bad.py", "def(:\n")
-    assert build.check(repo)
+    assert build.gate(repo)
 
 
-def test_check_flags_undefined_name(repo):
+def test_gate_flags_undefined_name(repo):
     _write(repo, ".codewhale/skills/X/bad.py", "print(nope)\n")
-    assert any("undefined name" in line for line in build.check(repo))
+    assert any("undefined name" in line for line in build.gate(repo))
 
 
-def test_check_passes_clean_tree(repo):
-    assert build.check(repo) == []
+def test_gate_passes_clean_tree(repo):
+    assert build.gate(repo) == []
 
 
-def test_check_ignores_syntax_warning(repo):
+def test_gate_ignores_syntax_warning(repo):
     _write(repo, ".codewhale/skills/X/w.py", 'import re\nx = re.compile("\\d+")\n')
-    assert build.check(repo) == []
+    assert build.gate(repo) == []
 
 
-def test_check_fails_when_pyflakes_unavailable(repo, monkeypatch):
+def test_gate_fails_when_pyflakes_unavailable(repo, monkeypatch):
     real = build._run
 
     def no_pyflakes(args, cwd):
@@ -98,7 +98,7 @@ def test_check_fails_when_pyflakes_unavailable(repo, monkeypatch):
         return real(args, cwd)
 
     monkeypatch.setattr(build, "_run", no_pyflakes)
-    assert any("pyflakes" in line for line in build.check(repo))
+    assert any("pyflakes" in line for line in build.gate(repo))
 
 
 # ── Task 2: snapshot / latest / main ───────────────────────

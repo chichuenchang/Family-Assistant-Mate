@@ -45,7 +45,7 @@ def _git_lines(root: Path, *args: str) -> list[str]:
     return [ln for ln in out.stdout.splitlines() if ln]
 
 
-def check(root: Path) -> list[str]:
+def gate(root: Path) -> list[str]:
     """Gate: syntax errors (compileall) + pyflakes `undefined name`. [] = pass."""
     errors: list[str] = []
     comp = _run([sys.executable, "-m", "compileall", "-q", CODE_DIR], root)
@@ -66,17 +66,17 @@ def git_state(root: Path) -> dict:
     return {"commit": commit, "dirty": bool(dirty_files), "dirty_files": dirty_files}
 
 
-def _skip(rel: str) -> bool:
+def _is_bytecode(rel: str) -> bool:
     return "__pycache__" in rel.split("/") or rel.endswith(".pyc")
 
 
 def files_to_copy(root: Path) -> list[str]:
     """Working tree under .codewhale + config.json: tracked, untracked-not-ignored,
     plus ignored files under .codewhale (skill .env) minus bytecode."""
-    tracked = _git_lines(root, "ls-files", "-co", "--exclude-standard", "--", CODE_DIR, "config.json")
+    not_ignored = _git_lines(root, "ls-files", "-co", "--exclude-standard", "--", CODE_DIR, "config.json")
     ignored = _git_lines(root, "ls-files", "-oi", "--exclude-standard", "--", CODE_DIR)
-    return sorted(rel for rel in set(tracked) | set(ignored)
-                  if not _skip(rel) and (root / rel).is_file())
+    return sorted(rel for rel in set(not_ignored) | set(ignored)
+                  if not _is_bytecode(rel) and (root / rel).is_file())
 
 
 def _link_data(root: Path, snap: Path) -> None:
@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(snap)
         return 0
-    errors = check(ROOT)
+    errors = gate(ROOT)
     if errors:
         print("BUILD FAILED, no snapshot:", *errors, sep="\n")
         return 1

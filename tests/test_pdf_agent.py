@@ -48,6 +48,15 @@ def test_doc_tool_outcome_takes_first_line_only(monkeypatch):
     assert out.docs == ["jim/pdf_edits/x/form_edited.pdf"]
 
 
+def test_doc_tool_preview_lines_become_images(monkeypatch):
+    reg = agent_core.REGISTRY
+    monkeypatch.setitem(reg.tool_map, "edit_pdf",
+                        lambda a: "a/x.pdf\n预览: a/p.png\nsession=1")
+    out = reg.call("edit_pdf", {}, agent_core.Caller(member="Jim"))
+    assert out.docs == ["a/x.pdf"]
+    assert out.images == ["a/p.png"]
+
+
 def test_system_prompt_describes_one_shot_workflow():
     p = agent_core._build_system_prompt()
     assert "edit_pdf" in p and "inspect_pdf" in p

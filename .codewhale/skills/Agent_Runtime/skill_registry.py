@@ -128,7 +128,7 @@ class Registry:
             # 首行是路径，后续可能有"警告:"行——只取首行；"预览:"行另作图发
             lines = result.strip().splitlines()
             out.docs = [lines[0]]
-            out.images = [ln.split(":", 1)[1].strip() for ln in lines[1:]
+            out.images = [ln.removeprefix(PREVIEW_PREFIX).strip() for ln in lines[1:]
                           if ln.startswith(PREVIEW_PREFIX)]
         if name in self.show_tools:
             out.shown = result

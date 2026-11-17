@@ -64,17 +64,17 @@ _BROWSER_NAMES = ("msedge", "microsoft-edge", "chrome", "google-chrome", "chromi
 
 def _data_uri(src: str, resolve_src: Callable[[str], str | None]) -> str | None:
     """闸门放行且是图片 → base64 data URI；其余 None。"""
-    p = resolve_src(src)
-    if not p:
+    rel = resolve_src(src)
+    if not rel:
         return None
-    mime = mimetypes.guess_type(p)[0] or ""
+    mime = mimetypes.guess_type(rel)[0] or ""
     if not mime.startswith("image/"):
         return None
-    return f"data:{mime};base64," + base64.b64encode(Path(p).read_bytes()).decode()
+    return f"data:{mime};base64," + base64.b64encode(_paths.resolve_rel(rel).read_bytes()).decode()
 
 
 def sanitize(html: str, resolve_src: Callable[[str], str | None]) -> tuple[str, list[str]]:
-    """→ (可交给浏览器的 HTML, 警告)。resolve_src(路径) → 本地文件路径或 None（成员闸门）。"""
+    """→ (可交给浏览器的 HTML, 警告)。resolve_src = 成员闸门 rt.resolve_sendable：路径 → data 相对路径或 None。"""
     warns: list[str] = []
     html = html.replace("﻿", "")    # 壳重建后 BOM 落进 head 成文本 → 页顶白条
     html = _SCRIPT_RE.sub("", html)
@@ -125,16 +125,10 @@ def _inject_head(html: str) -> str:
 # ── 渲染 ─────────────────────────────────────────────────────
 
 def find_browser(configured: str = "") -> str | None:
-    if configured and Path(configured).is_file():
-        return configured
-    for p in _BROWSERS:
-        if Path(p).is_file():
+    for p in (configured, *_BROWSERS):
+        if p and Path(p).is_file():
             return p
-    for n in _BROWSER_NAMES:
-        found = shutil.which(n)
-        if found:
-            return found
-    return None
+    return next(filter(None, map(shutil.which, _BROWSER_NAMES)), None)
 
 
 def render(html: str, out_pdf: Path, browser: str, timeout: int = RENDER_TIMEOUT) -> None:

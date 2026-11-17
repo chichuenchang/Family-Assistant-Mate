@@ -194,8 +194,7 @@ def cmd_create(args):
         _die("找不到 Edge/Chrome，config.json pdf.browser 填浏览器路径")
     d, meta, notice = _create_session(args.member, args.session)
     title = pdf_create.safe_title(args.title or meta["title"])
-    clean, warnings = pdf_create.sanitize(html, lambda p: (
-        str(_paths.resolve_rel(r)) if (r := rt.resolve_sendable(p, args.member)) else None))
+    clean, warnings = pdf_create.sanitize(html, lambda p: rt.resolve_sendable(p, args.member))
     out = d / f"{title}.pdf"
     try:
         pdf_create.render(clean, out, browser)

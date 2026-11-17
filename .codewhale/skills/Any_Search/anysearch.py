@@ -19,7 +19,7 @@ from pathlib import Path
 
 import project_env  # Agent_Runtime, on sys.path via bootstrap
 
-CAP = 6000             # max chars handed back to the LLM (DeepSeek max_tokens is tight)
+CAP = 6000              # max chars handed back to the LLM (DeepSeek max_tokens is tight)
 _TRUNC = "…[截断]"
 _TIMEOUT = 25           # under _run_cli's 30s subprocess cap
 ENDPOINT = "https://api.anysearch.com/mcp"

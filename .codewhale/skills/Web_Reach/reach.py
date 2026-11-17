@@ -16,7 +16,7 @@ from pathlib import Path
 
 import project_env  # Agent_Runtime, on sys.path via bootstrap
 
-CAP = 6000             # max chars handed back to the LLM (DeepSeek max_tokens is tight)
+CAP = 6000              # max chars handed back to the LLM (DeepSeek max_tokens is tight)
 BLOCK_CAP = 2000        # per bilingual_search block; 4 blocks ≈ 8000
 _TRUNC = "…[截断]"
 _JINA_TIMEOUT = 20      # under _run_cli's 30s subprocess cap

@@ -19,6 +19,8 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
+import project_env
+
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 DEFAULT_TIMEOUT = 60
@@ -183,7 +185,6 @@ def run_loopback_auth(prefix: str, scope: str, *, consent: str, next_step: str,
               "去 https://myaccount.google.com/permissions 移除本应用授权后重跑。")
         raise SystemExit(1)
 
-    import project_env
     path = project_env.set_key(f"{prefix}_REFRESH_TOKEN", refresh)
     print(f"\n授权成功：{prefix}_REFRESH_TOKEN 已写入 {path}")
     print(f"\n{next_step}")

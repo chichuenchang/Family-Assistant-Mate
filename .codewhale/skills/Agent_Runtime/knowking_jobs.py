@@ -41,7 +41,7 @@ from typing import Callable, Optional
 import paths as _paths
 import jsonfile
 
-_log = logging.getLogger("familyassist.knowking")
+_log = logging.getLogger("fam.knowking")
 
 # 默认 KnowKing 项目位置；可被 config.json knowking.project_dir 或环境变量 KNOWKING_DIR 覆盖
 _DEFAULT_PROJECT_DIR = r"C:\Users\slimj\PROJECTS\KnowKing"

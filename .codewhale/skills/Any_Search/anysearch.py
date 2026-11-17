@@ -29,7 +29,7 @@ _IMG_TIMEOUT = 10
 _IMG_TRIES = 3          # candidate URLs tried per wanted image
 IMG_BUDGET = 60         # seconds across all downloads; keeps any-images under its CLI timeout
 _BING_IMAGES = "https://www.bing.com/images/search?q="
-_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FamilyAssistant/1.0"
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) FAM/1.0"
 
 AVAILABLE_DOMAINS = [
     "general", "resource", "social_media", "finance", "academic", "legal",
@@ -261,7 +261,7 @@ def anysearch_call(tool_name, arguments, *, timeout=_TIMEOUT,
         "params": {"name": tool_name, "arguments": arguments},
     }).encode("utf-8")
     headers = {"Content-Type": "application/json",
-               "User-Agent": "FamilyAssistant/1.0 (+any_search)"}
+               "User-Agent": "FAM/1.0 (+any_search)"}
     if key:
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(endpoint, data=payload, headers=headers)

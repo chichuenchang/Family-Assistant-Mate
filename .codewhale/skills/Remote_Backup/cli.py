@@ -1,5 +1,5 @@
 """
-Family Assistant — Remote Backup CLI
+FAM — Remote Backup CLI
 
 用户数据云盘镜像。Agent 经白名单子命令调用（backup-restore 除外，仅本机）。
 用法: python .codewhale/skills/Remote_Backup/cli.py <command> [args]
@@ -132,7 +132,7 @@ def cmd_reorg(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Family Assistant — Remote Backup CLI")
+    parser = argparse.ArgumentParser(description="FAM — Remote Backup CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     for cmd, help_text in (("backup-now", "立即同步（忽略防抖）"),

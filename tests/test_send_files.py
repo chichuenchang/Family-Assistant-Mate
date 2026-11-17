@@ -51,20 +51,6 @@ def test_doc_file_unknown_id(tmp_path):
     assert _doc_cli(db, "doc-file", "--id", "999").returncode == 1
 
 
-# ── Task 2: 3-tuple split_reply + DOC sentinel ──────────────
-
-def test_split_reply_3tuple():
-    import agent_core as ac
-    r = ("hi\n" + ac.IMG_SENTINEL + "a.png\n" + ac.DOC_SENTINEL + "Family/x.pdf")
-    text, imgs, docs = ac.split_reply(r)
-    assert text == "hi" and imgs == ["a.png"] and docs == ["Family/x.pdf"]
-    # passthrough
-    assert ac.split_reply("plain") == ("plain", [], [])
-    # doc only
-    t, i, d = ac.split_reply(ac.DOC_SENTINEL + "p.pdf")
-    assert t == "" and i == [] and d == ["p.pdf"]
-
-
 # ── Task 3: send_file gate ──────────────────────────────────
 
 def test_resolve_sendable_gate(tmp_path, monkeypatch):
@@ -81,11 +67,11 @@ def test_resolve_sendable_gate(tmp_path, monkeypatch):
     bob = tmp_path / "bob" / "notes"; bob.mkdir(parents=True)
     (bob / "secret.png").write_bytes(b"x")
 
-    assert ac._resolve_sendable("Family/documents/lease.pdf", "Alex") == "Family/documents/lease.pdf"
-    assert ac._resolve_sendable("alex/notes/card.png", "Alex") == "alex/notes/card.png"
-    assert ac._resolve_sendable("bob/notes/secret.png", "Alex") is None
-    assert ac._resolve_sendable("../outside.txt", "Alex") is None
-    assert ac._resolve_sendable("Family/documents/missing.pdf", "Alex") is None
+    assert ac.rt.resolve_sendable("Family/documents/lease.pdf", "Alex") == "Family/documents/lease.pdf"
+    assert ac.rt.resolve_sendable("alex/notes/card.png", "Alex") == "alex/notes/card.png"
+    assert ac.rt.resolve_sendable("bob/notes/secret.png", "Alex") is None
+    assert ac.rt.resolve_sendable("../outside.txt", "Alex") is None
+    assert ac.rt.resolve_sendable("Family/documents/missing.pdf", "Alex") is None
 
 
 # ── Task 4: Telegram sendDocument multipart ─────────────────

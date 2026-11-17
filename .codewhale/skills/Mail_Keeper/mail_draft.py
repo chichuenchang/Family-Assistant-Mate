@@ -6,7 +6,7 @@ Mail Keeper — 待确认邮件草稿（回信 kind="reply" / 新信 kind="new"�
 "确认/发送" 才允许 send。三道确定性闸门（不依赖 LLM 自觉）：
 
     1. 确认必须落在**紧接着预览的那一轮**：草稿记下起草时的 turn_id（每用户单调递增，
-       agent_core._apply_context 注入），send 时要求 turn_id == 草稿 turn_id + 1 且同一
+       skill_registry.Registry.arguments 注入），send 时要求 turn_id == 草稿 turn_id + 1 且同一
        用户。同一轮 draft+send 不成立（差 0），所以被注入的邮件无法自问自答把信发出去；
        隔了别的对话也不成立——用户那句"确认"必须是对着刚看到的预览说的
     2. 本轮用户原话（去标点后）须**整句**是一句发送确认 —— LLM 编不出用户的确认；

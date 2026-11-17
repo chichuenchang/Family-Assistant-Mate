@@ -1,6 +1,6 @@
 # Agent Runtime
 
-> Agent 运行时 skill：频道无关的 `Agent` 大脑 + 各远程频道传输层（微信、Telegram、未来其他）。让用户从手机上通过各类聊天软件远程操控电脑上的 Family Assistant。核心思想：**一个频道无关的 Agent，多个轻量传输层**。
+> Agent 运行时 skill：频道无关的 `Agent` 大脑 + 各远程频道传输层（微信、Telegram、未来其他）。让用户从手机上通过各类聊天软件远程操控电脑上的 FAM。核心思想：**一个频道无关的 Agent，多个轻量传输层**。
 
 ## 概述
 
@@ -21,7 +21,7 @@
 ├── bootstrap.py        ← sys.path 单一入口
 ├── backup_hook.py      ← 各 CLI 写入后 mark_dirty
 ├── jsonfile.py         ← config.json / 状态文件读写（缺失/损坏读作 {}）
-├── google_oauth.py     ← Google provider 共用 --auth 回环授权
+├── google_oauth.py     ← Google provider 共用：GoogleAccount（token + 认证调用）、--auth 回环授权
 ├── members.py          ← 成员注册表（频道 id → 成员名；存 git 忽略的 data/members.json）
 ├── paths.py            ← 磁盘布局解析（数据落盘位置的单一事实来源）
 ├── migrate_storage.py  ← 旧单库/旧目录 → 按成员分库的一次性迁移
@@ -56,7 +56,7 @@ reply = agent.handle_media(paths, text, user="<频道内唯一id>", member="<成
 - `user` = 该频道内用户/会话的唯一标识（微信 `from_user`、Telegram `chat_id`）。Agent 按 `user` 隔离对话历史，互不串台。
 - `member` = `members.resolve(频道, 频道id)` 解析出的成员名。**必传**：为空时 Agent 直接返回空串（防御纵深，未注册来源不碰 LLM）。
 - `handle` 返回的字符串即最终回复，原样发回频道即可。
-- `Agent()` 构造时从 `config.json` 提取合法值组装 system prompt（不嵌入 FamilyAssistant.md，省 token），进程内常驻复用，不要每条消息都 new。
+- `Agent()` 构造时从 `config.json` 提取合法值组装 system prompt（不嵌入 FAM.md，省 token），进程内常驻复用，不要每条消息都 new。
 - **上下文自动管理**（旋钮在 `config.json` `agent` 块，`Agent()` 构造参数可覆盖，0=关闭）：`context_max_tokens`（默认 30000）= 每用户对话历史 token 预算，超出从最旧一问一答成对丢弃，保留最近上下文；`idle_clear_hours`（默认 4）= 用户闲置超过 N 小时后，下一条消息前自动清空其对话历史。用户随时可发 `/clear`（或"清除上下文"）手动清空。每轮（命令除外）追加进 `data/.state/chat_history.jsonl`（只留原话 + 最终回复，永不清理，不进云备份），清空/重启不丢；LLM 按需调 `chat_history` 回读。
 - `max_tokens` 截断（`finish_reason=length`）：残缺 `tool_calls` 不执行（参数 JSON 残缺则解析为空参数照跑），改注入 `TRUNCATED_TOOLS_NOTE` 让模型拆批重来；残缺文本回复加 `TRUNCATED_REPLY_MARK`，历史只存标记。
 
@@ -90,6 +90,7 @@ python .codewhale/skills/Agent_Runtime/telegram_bot.py --no-debug
 微信凭据加密存于 `data/.state/wechat_creds.json`；Telegram 去重 offset 存于 `data/.state/.telegram_offset`。
 微信引用反查缓存存于 `data/.state/wechat_recent_msgs.json`（近期入站消息）与
 `data/.state/wechat_sent_msgs.json`（bot 出站回复+后台推送，按收件人+时间戳匹配）——均为运行时状态，不进备份。
+常驻运行走快照：`/build` 冻结代码，`/run-daemon` 跑最新快照（改仓库不影响运行中的 bot；见 `build.py` 文件头）。
 微信 Bot 启动时抢单实例锁（绑定 `127.0.0.1:47831`）：双开会导致每条消息处理/回复两次，后启动的进程直接退出。
 多账号：一个 ClawBot 账号一份凭据 `wechat_creds_<标签>.json`（默认账号仍 `wechat_creds.json`），一进程全挂。
 每账号一条轮询线程，消息排队主线程串行分发（Agent/缓存非线程安全）；后台节拍全进程一份，推送找该用户发过消息的 bot（context_token 存在各 bot 内存）。
@@ -98,7 +99,7 @@ python .codewhale/skills/Agent_Runtime/telegram_bot.py --no-debug
 ## 新增频道
 
 加一个频道 = 继承 `transport_base.Transport`，实现三个 send_*，把 SDK 消息翻译成 `on_text` / `on_media`。
-闸门、节流刷新、来件落盘、哨兵拆分投递、异常兜底、到期提醒 / 懂王投递 / 备份节拍全在基类，不复制。
+闸门、节流刷新、来件落盘、回复投递（`Reply` 的图/文档/文字）、异常兜底、到期提醒 / 懂王投递 / 备份节拍全在基类，不复制。
 
 ```python
 # .codewhale/skills/Agent_Runtime/mychannel_bot.py
@@ -153,7 +154,7 @@ YouTube/X/Reddit/TikTok/Instagram/Bilibili/Zhihu 搜集"大家在怎么说"，�
   "已开始"给用户；出报告后由传输层轮询 `poll_and_deliver(send_fn, channel)` 把报告推回**发起人**
   （manifest `FAST_TICKS`；Telegram 挂在长轮询尾部 ~30s，微信走 `fast-tick` 守护线程 ~20s）。
 - **频道上下文注入**：`Agent(channel=...)`（各传输层构造时传 `"wechat"`/`"telegram"`）+ handle 里
-  `_apply_context` 把 `__channel`/`__user`/`member` 注入 `knowking` 工具参数（代码确定性，LLM 不得伪造投递目标）。本地测试无 channel → 工具返回"仅正式频道可用"。
+  `skill_registry.Registry.arguments` 把 `__channel`/`__user`/`member` 注入 `knowking` 工具参数（代码确定性，LLM 不得伪造投递目标）。本地测试无 channel → 工具返回"仅正式频道可用"。
 - **任务落盘** `data/.state/.knowking_jobs/<id>.json`（运行时瞬态，已列入 `backup_sync._HARD_EXCLUDE_DIRS`
   绝不进云备份；投递成功即删，删除失败标 delivered 下轮只清理绝不重发）。
   `running` 超 `stale_seconds`（默认 1800s，bot 重启/线程死）→ 记超时 error 再推送。同频道同用户
@@ -171,9 +172,9 @@ YouTube/X/Reddit/TikTok/Instagram/Bilibili/Zhihu 搜集"大家在怎么说"，�
 
 ## 安全
 
-- **命令白名单**：`config.json` 的 `wechat.allowed_commands` 是**记账族**命令白名单（`agent_core.ALLOWED_COMMANDS` 读取，config 缺失才回退内置集）；改它只影响记账族。备忘(note-*)/工作表(sheet-*)/图表(chart-render)/日程(cal-*)/文档(doc-* 除 doc-remove)/备份(backup-now/status/verify)/联网(web-*/any-*) 是 Agent 核心能力，`agent_core` 在装载时**恒定并入** `ALLOWED_COMMANDS`，不受本白名单增删影响。成员增删、doc-remove、backup-restore/reorg 等敏感命令既不在白名单也不并入 → Agent 调不到，仅限本机。
-- **磁盘布局**：所有数据落盘位置经 `Agent_Runtime/paths.py`（单一事实来源）。`config.json` `data_root`(默认 data)+`family_dir_name`(默认 Family) 定根。家庭共享在 `data/Family/`（ledger.db 财务、documents.db 文档+成员资料、receipts/、documents/）；成员私有在 `data/<成员>/`（notes/、inbox/、pdf_edits/）。来图存发送者 `data/<成员>/inbox/`；备忘图搬 notes/，其余留 inbox。`agent_core.RECEIPTS_DIR`/`DOCUMENTS_DIR` 由 `paths` 计算，不硬编码。
-- **成员注册表**：`data/members.json`（git 不跟踪 — 姓名/频道 id 属隐私）只在本机用 `Expense_Tracker/cli.py member-add/list/remove` 管理（成员命令挂在记账 CLI 上，非本目录；不在命令白名单内，Agent 调不到）。未注册频道 id 一律静默丢弃；写入类账目的归属由 `agent_core` 注入解析出的成员名，LLM 给的 member 一律剥离（防冒名）。
+- **命令白名单**：`config.json` 的 `wechat.allowed_commands` 是**记账族**命令白名单（`Expense_Tracker/agent_tools.py` `AGENT_COMMANDS` 读取，config 缺失才回退内置集）；改它只影响记账族。备忘(note-*)/工作表(sheet-*)/图表(chart-render)/日程(cal-*)/文档(doc-* 除 doc-remove)/备份(backup-now/status/verify)/联网(web-*/any-*) 是 Agent 核心能力，`skill_registry.load` 装载时按各 manifest **恒定并入** `tool_runtime.ALLOWED`，不受本白名单增删影响。成员增删、doc-remove、backup-restore/reorg 等敏感命令既不在白名单也不并入 → Agent 调不到，仅限本机。
+- **磁盘布局**：所有数据落盘位置经 `Agent_Runtime/paths.py`（单一事实来源）。`config.json` `data_root`(默认 data)+`family_dir_name`(默认 Family) 定根。家庭共享在 `data/Family/`（ledger.db 财务、documents.db 文档+成员资料、receipts/、documents/）；成员私有在 `data/<成员>/`（notes/、inbox/、pdf_edits/、pdf_creates/）。来图存发送者 `data/<成员>/inbox/`；备忘图搬 notes/，其余留 inbox。
+- **成员注册表**：`data/members.json`（git 不跟踪 — 姓名/频道 id 属隐私）只在本机用 `Expense_Tracker/cli.py member-add/list/remove` 管理（成员命令挂在记账 CLI 上，非本目录；不在命令白名单内，Agent 调不到）。未注册频道 id 一律静默丢弃；写入类账目的归属由 `skill_registry.Registry.arguments` 注入解析出的成员名，LLM 给的 member 一律剥离（防冒名）。
 - **外部内容围栏**：非本地来源文本经 `tool_runtime.fence` 才进 LLM——manifest `UNTRUSTED_TOOLS` 的工具结果、来件 OCR、引用消息。软防线：降低注入命中率，不限制损害；备忘/工作表/成员资料（本地库）未套。
 - **凭据本地化**：所有频道凭据（微信扫码态、Telegram token）只存本地，不外传。
 - Telegram token 走环境变量，不写进仓库。

@@ -1,5 +1,5 @@
 """
-微信 iLink Bot 传输层 — 将微信消息接入 Family Assistant。
+微信 iLink Bot 传输层 — 将微信消息接入 FAM。
 
 基于 weixin-ilink SDK（腾讯 iLink Bot 协议的 Python 实现）。
 扫码登录，长轮询，零 OpenClaw 依赖。
@@ -60,12 +60,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); 
 
 import logging
 
-from agent_core import Agent, setup_logging, split_reply as _split_reply
+from agent_core import Agent, setup_logging
 from members import resolve
 from transport_base import Transport, with_quote as _with_quote
 import paths as _paths
 
-log = logging.getLogger("familyassist.wechat")
+log = logging.getLogger("fam.wechat")
 
 # 凭据存储路径（跟随 data_root；备份硬排除任何含 "creds" 的文件名）
 # 多账号：默认账号 wechat_creds.json，其余 wechat_creds_<标签>.json；SDK cursor 各自紧贴为 .sync
@@ -325,6 +325,28 @@ def _self_heal_poll(bot) -> None:
     bot.client.poll = _poll_with_selfheal
 
 
+def _log_send_failures() -> None:
+    """SDK 丢弃 sendmessage 响应：HTTP 200 + ret/errcode≠0 时回复静默丢失。包一层记 WARNING。"""
+    from weixin_ilink import api
+    if getattr(api.send_message, "_logged", False):
+        return
+    orig = api.send_message
+
+    def send_message(opts, msg):
+        resp = orig(opts, msg)
+        if not isinstance(resp, dict):  # 已发出；日志不得把成功变异常
+            return resp
+        to = msg.get("to_user_id")
+        ret, errcode = resp.get("ret") or 0, resp.get("errcode") or 0
+        log.debug("sendmessage to=%s ctx=%s resp=%.300s", to, bool(msg.get("context_token")), resp)
+        if ret or errcode:
+            log.warning("sendmessage 失败 to=%s ret=%s errcode=%s resp=%.300s", to, ret, errcode, resp)
+        return resp
+
+    send_message._logged = True
+    api.send_message = send_message
+
+
 def _wire(bot, t: WeChatTransport) -> None:
     """一个账号的 bot 挂上自愈轮询 + 全部消息处理（各账号同一套，共用 t）。"""
     _self_heal_poll(bot)
@@ -420,6 +442,7 @@ def run_bot(relogin: bool = False, account: str | None = None) -> None:
 
     _load_recent_msgs()    # 重启后仍能反查引用的历史消息
     _load_sent_replies()   # bot 出站记录（引用 bot 回复按时间匹配）
+    _log_send_failures()
 
     # 要求重新登录 / 指定账号尚无凭据 / 一个账号都没有 → 扫码
     target = creds_path(account)
@@ -451,7 +474,7 @@ def run_bot(relogin: bool = False, account: str | None = None) -> None:
 
 def run_test() -> None:
     """本地命令行测试，无需微信。"""
-    print("Family Assistant — 微信通道测试模式")
+    print("FAM — 微信通道测试模式")
     print("全量上下文 Agent，跟 CodeWhale 一样的工作方式。")
     import llm_client
     print(llm_client.ready_note())
@@ -465,13 +488,12 @@ def run_test() -> None:
         if msg.lower() in ("quit", "exit", "q"):
             break
         reply = agent.handle(msg, member="本地测试")
-        text, imgs, docs = _split_reply(reply)
-        for rel in imgs:
+        for rel in reply.images:
             print(f"助手> [图片] {rel}")
-        for rel in docs:
+        for rel in reply.docs:
             print(f"助手> [文件] {rel}")
-        if text:
-            print(f"助手> {text}")
+        if reply.text:
+            print(f"助手> {reply.text}")
         print()
 
 

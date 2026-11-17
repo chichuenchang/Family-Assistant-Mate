@@ -1,5 +1,5 @@
 """
-Family Assistant — Expense Tracker 数据模型定义
+FAM — Expense Tracker 数据模型定义
 
 SQLite 数据库表结构，用于本地个人/家庭记账。
 支持多币种、定期存款、多国报税记录。

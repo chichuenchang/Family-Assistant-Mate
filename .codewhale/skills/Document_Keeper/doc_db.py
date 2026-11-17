@@ -1,5 +1,5 @@
 """
-Family Assistant — Document Keeper 数据库操作层
+FAM — Document Keeper 数据库操作层
 
 documents 表的 SQLite CRUD 和到期查询。Agent / CLI / reminder 统一走这个模块。
 表建在家庭文档库 data/Family/documents.db（DB_PATH 经 doc_models → paths.family_documents_db()）。

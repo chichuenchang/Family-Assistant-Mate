@@ -34,14 +34,14 @@ class FakeAgent:
         self.seen.append(("text", text, user, member))
         if self.boom:
             raise RuntimeError("llm down")
-        return self.reply
+        return agent_core.Reply(self.reply)
 
     def handle_media(self, paths, text, user="", member="", said=None):
         self.said = said
         self.seen.append(("media", paths, text, user, member))
         if self.boom:
             raise RuntimeError("ocr down")
-        return self.reply
+        return agent_core.Reply(self.reply)
 
 
 def _seed(tmp_path):
@@ -63,7 +63,7 @@ def test_deliver_photo_then_doc_then_text_then_hook(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     img, doc = _seed(tmp_path)
     t = FakeTransport(agent=FakeAgent())
-    t.deliver(7, f"说明\n{agent_core.IMG_SENTINEL}{img}\n{agent_core.DOC_SENTINEL}{doc}")
+    t.deliver(7, agent_core.Reply("说明", [img], [doc]))
     assert [c[0] for c in t.calls] == ["photo", "doc", "text", "after"]
     assert t.calls[2] == ("text", 7, "说明")
 
@@ -71,13 +71,13 @@ def test_deliver_photo_then_doc_then_text_then_hook(tmp_path, monkeypatch):
 def test_deliver_gates_missing_and_escaping_paths(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     t = FakeTransport(agent=FakeAgent())
-    t.deliver(7, f"hi\n{agent_core.IMG_SENTINEL}Alex/missing.png\n{agent_core.DOC_SENTINEL}../../etc/passwd")
+    t.deliver(7, agent_core.Reply("hi", ["Alex/missing.png"], ["../../etc/passwd"]))
     assert t.calls == [("text", 7, "hi"), ("after", 7, "hi")]
 
 
 def test_deliver_empty_reply_sends_nothing():
     t = FakeTransport(agent=FakeAgent())
-    t.deliver(7, "")
+    t.deliver(7, agent_core.Reply())
     assert t.calls == []
 
 
@@ -86,7 +86,7 @@ def test_one_failed_attachment_does_not_block_text(tmp_path, monkeypatch):
     img, _ = _seed(tmp_path)
     t = FakeTransport(agent=FakeAgent())
     t.send_photo = lambda target, path: (_ for _ in ()).throw(RuntimeError("net"))
-    t.deliver(7, f"文字\n{agent_core.IMG_SENTINEL}{img}")
+    t.deliver(7, agent_core.Reply("文字", [img]))
     assert ("text", 7, "文字") in t.calls
 
 
@@ -235,7 +235,7 @@ def test_real_manifests_register_ticks():
 def test_agent_is_lazy():
     t = FakeTransport()
     assert t._agent is None
-    t.deliver(1, "只发文字")           # 投递不构造 Agent
+    t.deliver(1, agent_core.Reply("只发文字"))           # 投递不构造 Agent
     assert t._agent is None
 
 

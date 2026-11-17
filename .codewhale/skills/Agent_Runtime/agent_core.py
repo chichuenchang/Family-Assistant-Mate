@@ -11,8 +11,8 @@ Agent Core — 频道无关的全量上下文智能助手。
     LLM 自主选择工具 → 执行 → LLM 生成自然语言回复
 
 频道接入契约（详见 .codewhale/skills/Agent_Runtime/SKILL.md）:
-    agent.handle(text, user, member)        # 文字消息
-    agent.handle_media(paths, text, user, member)  # 图片/PDF + 随后文字
+    agent.handle(text, user, member)        # 文字消息 → Reply(text, images, docs)
+    agent.handle_media(paths, text, user, member)  # 图片/PDF + 随后文字 → Reply
     user = 频道内唯一 id（隔离各用户对话历史）
     member = members.resolve 解析出的成员名；为空直接返回空串（未注册来源不碰 LLM）
 
@@ -22,7 +22,7 @@ Agent Core — 频道无关的全量上下文智能助手。
 用法:
     from agent_core import Agent  # 同目录传输层直接 import
     agent = Agent()
-    reply = agent.handle("这个月花了多少", user="wx_xxx")
+    reply = agent.handle("这个月花了多少", user="wx_xxx", member="爸爸").text
 """
 
 from __future__ import annotations
@@ -35,7 +35,8 @@ import sys
 import time
 from collections import defaultdict
 from collections.abc import Sequence
-from datetime import date, datetime
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 # Windows 控制台编码容错
@@ -59,30 +60,12 @@ import paths as _paths
 import skill_registry
 import tool_runtime as rt
 
-_log = logging.getLogger("familyassist.agent")
+_log = logging.getLogger("fam.agent")
 
 
 # ── config.json（值的单一事实来源；不在代码里重复硬编码） ──────
 
 _CONFIG = rt.CONFIG
-
-# 票据/文档目录经 paths（单一事实来源）：家庭共享。
-RECEIPTS_DIR = _paths.family_dir() / "receipts"
-DOCUMENTS_DIR = _paths.family_dir() / "documents"
-
-
-def receipt_month_dir(dt: date | None = None) -> Path:
-    """票据按月分子目录：Family/receipts/YYYY-MM/，不存在则创建。"""
-    return _paths.family_receipts_dir(dt)
-
-
-def member_inbox_dir(member: str, dt: date | None = None) -> Path:
-    """来图暂存目录（按发送成员）：data/<成员>/inbox/YYYY-MM/，不存在则创建。
-
-    传输层把来图先存发送者的 inbox（成员私有）；分类后：备忘图→该成员 notes，
-    票据→Family/receipts，文档→Family/documents。避免私有图先落到家庭共享目录。"""
-    return _paths.member_inbox_dir(member, dt)
-
 
 # ── 调试日志（各 Bot 共用；默认开，--no-debug 关） ─────────────────
 
@@ -92,15 +75,15 @@ _LOG_BACKUPS = 3
 
 
 def setup_logging(debug: bool = True) -> logging.Logger:
-    """配置 "familyassist" 日志器，各传输层（telegram/wechat）调一次即可。
+    """配置 "fam" 日志器，各传输层（telegram/wechat）调一次即可。
 
     项目规范：所有 Bot 默认开调试日志（debug=True）。新增 Bot 直接 setup_logging() 即继承。
     debug=True（默认）：DEBUG 全量，同时写 stderr 和 data/.state/bot_debug.log（含完整 traceback），
                 供排查 OCR/记账/工具调用链路。
     debug=False（--no-debug）：仅 WARNING 及以上，安静运行。
-    子日志器（familyassist.telegram 等）自动继承本配置。
+    子日志器（fam.telegram 等）自动继承本配置。
     """
-    logger = logging.getLogger("familyassist")
+    logger = logging.getLogger("fam")
     logger.setLevel(logging.DEBUG if debug else logging.WARNING)
     if logger.handlers:  # 幂等：重复调用不叠加 handler
         return logger
@@ -122,56 +105,10 @@ def setup_logging(debug: bool = True) -> logging.Logger:
 
 
 # ── 技能注册表：各 skill 的 agent_tools.py 合并（新增 skill 零改动本文件） ──
-# 契约见 skill_registry.py。命令白名单/路由/超时住在 tool_runtime，此处只转发同一对象。
+# 契约与工具派发（成员锁 / 上下文注入 / 围栏 / 产出收集）见 skill_registry.py。
 
 REGISTRY = skill_registry.load()
-
-ALLOWED_COMMANDS = rt.ALLOWED
-_CLI_TIMEOUTS = rt.CLI_TIMEOUTS
-_cli_path = rt.cli_path
-_run_cli = rt.run_cli
-_relocate_image = rt.relocate_image
-_resolve_sendable = rt.resolve_sendable
-_TOOL_MAP = REGISTRY.tool_map
-TOOL_SCHEMAS = REGISTRY.schemas
-_MEMBER_LOCKED = REGISTRY.member_locked
-_CONTEXT_TOOLS = REGISTRY.context_tools
-_UNTRUSTED_TOOLS = REGISTRY.untrusted_tools
-_IMAGE_TOOLS = REGISTRY.image_tools
-_DOC_TOOLS = REGISTRY.doc_tools
-_SHOW_TOOLS = REGISTRY.show_tools
-
-
-def _apply_member(tool_name: str, targs: dict, member: str) -> dict:
-    """MEMBER_LOCKED 工具：剥离 LLM 给的 member，注入解析出的成员名（写入归属 /
-    按成员私有的读写皆强制，LLM 不得跨成员）。其余工具原样放行。"""
-    if tool_name in _MEMBER_LOCKED:
-        targs = {k: v for k, v in targs.items() if k.lstrip("-") != "member"}
-        if member:
-            targs["member"] = member
-    return targs
-
-
-def _apply_context(tool_name: str, targs: dict, channel: str, user: str,
-                   member: str, turn_id: int = 0, text: str = "") -> dict:
-    """CONTEXT_TOOLS：注入发起频道 + 发起人 id + 成员名（异步投递需要）
-    + 本轮序号 __turn_id（每用户单调递增）与用户原话 __text（对外不可撤回动作的
-    两轮确认闸门，见 Mail_Keeper/mail_draft.check）。确定性来自代码而非 LLM。
-    其余工具原样放行。"""
-    if tool_name in _CONTEXT_TOOLS:
-        targs = dict(targs)
-        targs["__channel"] = channel or ""
-        targs["__user"] = str(user) if user else ""
-        targs["__turn_id"] = int(turn_id)
-        targs["__text"] = text
-        if member:
-            targs["member"] = member
-    return targs
-
-
-def _apply_fence(tool_name: str, result: str) -> str:
-    """UNTRUSTED_TOOLS：结果来自非本地来源，套围栏后才进 LLM。其余工具原样放行。"""
-    return rt.fence(result, tool_name) if tool_name in _UNTRUSTED_TOOLS else result
+Caller = skill_registry.Caller
 
 
 def _pop_meta(message: dict, tokens: dict) -> tuple[bool, str | None]:
@@ -198,7 +135,7 @@ _CORE_RULES = [
 def _build_system_prompt(idle_clear_hours: float | None = None) -> str:
     """组装 system prompt：身份 + 成员 + 各 skill 段落（manifest）+ 通用准则。
 
-    工具定义走 API tools 参数。SKILL.md / FamilyAssistant.md 是开发文档，不进 prompt。
+    工具定义走 API tools 参数。SKILL.md / FAM.md 是开发文档，不进 prompt。
     """
     # 家庭成员 + 别名/法定名（data/members.json；空注册表则整段省略）
     members_cfg = _members_registry.load_members()
@@ -222,7 +159,7 @@ def _build_system_prompt(idle_clear_hours: float | None = None) -> str:
     sections = "\n\n".join(REGISTRY.prompt_sections)
     rules = "\n".join(f"- {r}" for r in [*REGISTRY.prompt_rules, *_CORE_RULES])
 
-    return f"""你是 Family Assistant，一个运行在微信/Telegram 等远程频道里的个人/家庭 AI 助手。
+    return f"""你是 FAM，一个运行在微信/Telegram 等远程频道里的个人/家庭 AI 助手。
 
 ## 你是谁
 - 你可以帮用户记账、查账、汇总开销、管理定期存款、查询汇率、OCR 票据、记私人备忘等
@@ -251,9 +188,6 @@ def _build_system_prompt(idle_clear_hours: float | None = None) -> str:
 """
 
 
-IMG_SENTINEL = "\x01IMG:"
-DOC_SENTINEL = "\x01DOC:"
-
 # max_tokens 截断（finish_reason=length）
 TRUNCATED_REPLY_MARK = "（回复超出长度上限被截断）"
 TRUNCATED_TOOLS_NOTE = ("[系统] 你上一条输出超出长度上限被截断，其中的工具调用参数不完整，"
@@ -262,6 +196,14 @@ TRUNCATED_TOOLS_NOTE = ("[系统] 你上一条输出超出长度上限被截断�
 TOOL_ROUNDS = int((_CONFIG.get("agent") or {}).get("tool_rounds") or 30)
 TOOL_LIMIT_NOTE = ("[系统] 本轮工具调用次数已用完，不要再调用任何工具。请直接用已拿到的结果"
                    "回复用户：列出已完成的部分，说明还剩哪些没做，并提示用户回复“继续”接着处理。")
+
+@dataclass
+class Reply:
+    """Agent 给传输层的一次回复。images/docs = data 相对路径，传输层先发图、再发文档、最后发文字。"""
+    text: str = ""
+    images: list[str] = field(default_factory=list)
+    docs: list[str] = field(default_factory=list)
+
 
 CLEAR_COMMANDS = ("/clear", "清除上下文", "清空上下文", "清空记忆")
 
@@ -273,25 +215,6 @@ def is_clear_command(text: str) -> bool:
 def is_command(text: str) -> bool:
     """不经 LLM 的频道无关命令（/clear 类、/model、/effort）。传输层据此绕开攒着的来件。"""
     return is_clear_command(text) or _llm.parse_command(text.strip()) is not None
-
-
-def split_reply(reply: str) -> tuple[str, list[str], list[str]]:
-    """剥离 \\x01IMG:/\\x01DOC: 哨兵行，返回 (可见文本, [图片], [文档]) 三元组。"""
-    imgs, docs, keep = [], [], []
-    for line in (reply or "").split("\n"):
-        if line.startswith(IMG_SENTINEL):
-            p = line[len(IMG_SENTINEL):].strip()
-            if p:
-                imgs.append(p)
-        elif line.startswith(DOC_SENTINEL):
-            p = line[len(DOC_SENTINEL):].strip()
-            if p:
-                docs.append(p)
-        else:
-            keep.append(line)
-    return "\n".join(keep).strip(), imgs, docs
-
-
 
 
 # Agent 上下文管理旋钮（config.json "agent" 块；键缺失用默认值，显式 0 = 关闭该机制）
@@ -311,14 +234,6 @@ def _now_context() -> str:
     return (f"\n\n## 当前时间\n{now:%Y-%m-%d %H:%M}"
             f"（星期{_WEEKDAYS_ZH[now.weekday()]}，本地时间）")
 
-
-
-# ── 转发：实现在 context_budget / llm_client（测试直引这些名字） ──
-_estimate_tokens = _budget.estimate_tokens
-_msg_tokens = _budget.msg_tokens
-_HIST_TOOL_CAP = _budget.HIST_TOOL_CAP
-_load_llm_overrides = _llm.load_overrides
-_save_llm_overrides = _llm.save_overrides
 
 
 class Agent:
@@ -349,23 +264,25 @@ class Agent:
         self.history: dict[str, list[dict]] = defaultdict(list)
         self._last_active: dict[str, float] = {}
         self._turn_seq: dict[str, int] = {}   # 用户 → 轮次序号（两轮确认闸门用，进程内单调）
-        self._llm_overrides: dict[str, dict] = _load_llm_overrides()
+        self._llm_overrides: dict[str, dict] = _llm.load_overrides()
 
     def handle(self, text: str, user: str = "default", member: str = "", *,
-               said: str | None = None, media: Sequence[str] = ()) -> str:
+               said: str | None = None, media: Sequence[str] = ()) -> Reply:
         """said = 用户本人亲手打的字（确认闸门 __text 只认它）。text 可能掺了引用/OCR 等
         外部内容，传输层须另传 said；缺省 = text（本地 CLI 等无掺杂入口）。
         media = 本轮来件路径，只进对话存档（chat_archive）。"""
         said = text if said is None else said
         # 防御纵深：传输层闸门漏掉的未注册来源，这里二次拦截，不碰 LLM
         if not member:
-            return ""
+            return Reply()
         text = text.strip()
         if not text:
-            return "收到空消息。"
+            return Reply("收到空消息。")
         # 每条用户消息 = 一轮（/clear、/model 这类也算，中间插一条就断掉待确认草稿的链）
         turn_id = self._turn_seq.get(user, 0) + 1
         self._turn_seq[user] = turn_id
+        caller = Caller(member=member, channel=self.channel, user=user,
+                        turn_id=turn_id, said=said)
 
         # 闲置自动清空：距该用户上次消息超过 idle_clear_hours → 旧话题上下文作废
         now = time.time()
@@ -380,16 +297,16 @@ class Agent:
         # 频道无关命令：清除本用户对话上下文（不经 LLM，零 token）
         if is_clear_command(text):
             self.history.pop(user, None)
-            return "✅ 对话上下文已清除。"
+            return Reply("✅ 对话上下文已清除。")
 
         # 频道无关命令：/model /effort 运行时切换 LLM（不经 LLM，零 token）
         llm_reply = self._handle_llm_command(text, user)
         if llm_reply is not None:
-            return llm_reply
+            return Reply(llm_reply)
 
         missing = _llm.missing_key(self._llm_settings(user)[0])
         if missing:
-            return f"未配置 {missing}。"
+            return Reply(f"未配置 {missing}。")
 
         member_note = (f"\n\n## 当前对话成员\n{member} —— 写入类操作自动归到该成员名下；"
                        f"查询类工具可用 member 参数按成员过滤。")
@@ -422,7 +339,7 @@ class Agent:
             if message is None:
                 if tool_counts:
                     break   # 工具已生效：走收尾，照常进历史与存档
-                return "\n\n".join(["抱歉，暂时出错了。", *shown.values()])
+                return Reply("\n\n".join(["抱歉，暂时出错了。", *shown.values()]))
             cut, used = _pop_meta(message, tokens)   # used: 本次调用的顶替模型，无则空
             fallback = used or fallback
             # 思考链进 INFO 日志；键不 pop——DeepSeek 同轮工具调用须原样回传。
@@ -456,34 +373,17 @@ class Agent:
                     targs = json.loads(tc["function"].get("arguments") or "{}")
                 except (json.JSONDecodeError, KeyError):
                     targs = {}
-                fn = _TOOL_MAP.get(name)
-                targs = rt.to_manifest_keys(name, targs)
-                targs = _apply_member(name, targs, member)
-                targs = _apply_context(name, targs, self.channel, user, member,
-                                       turn_id=turn_id, text=said)
-                result = fn(targs) if fn else f"[错误] 未知工具: {name}"
+                out = REGISTRY.call(name, targs, caller)
+                produced_images.extend(out.images)
+                produced_docs.extend(out.docs)
+                if out.shown:
+                    shown[name] = out.shown
                 # 回复里只按工具名计数（逐条列参数会刷屏）；明细进调试日志
-                brief = ", ".join(f"{k}={v}" for k, v in targs.items())
-                _log.debug("工具 %s(%s) → %s", name, brief, result[:200])
-                if result and not result.startswith("[错误]"):
-                    if name in _IMAGE_TOOLS:
-                        # 每行一张（fetch_images 多张）；按行不按空白拆——路径可含空格
-                        produced_images.extend(
-                            ln.strip() for ln in result.splitlines() if ln.strip())
-                    elif name in _DOC_TOOLS:
-                        # pdf-edit 第一行是路径，后续可能有"警告:"行——哨兵只取首行
-                        produced_docs.append(result.strip().splitlines()[0])
-                    if name in _SHOW_TOOLS:
-                        shown[name] = result.replace("\x01", "")   # 外部文本不得伪造哨兵行
                 tool_counts[name] = tool_counts.get(name, 0) + 1
-                msgs.append({"role": "tool",
-                             "tool_call_id": tc.get("id", ""),
-                             "content": _apply_fence(name, result)})
-                # 先截断再套围栏：反过来闭合标记会被截掉
-                turn.append({"role": "tool",
-                             "tool_call_id": tc.get("id", ""),
-                             "content": _apply_fence(
-                                 name, _budget.clip_tool_result(result))})
+                msgs.append({"role": "tool", "tool_call_id": tc.get("id", ""),
+                             "content": out.for_llm})
+                turn.append({"role": "tool", "tool_call_id": tc.get("id", ""),
+                             "content": out.for_history})
         else:
             # 轮数用完没 break：收尾一次。仍带 tools（历史里有 tool_calls，
             # 部分 API 不带 tools 会拒），返回的 tool_calls 一律不执行
@@ -519,18 +419,14 @@ class Agent:
         chat_archive.append(self.channel, user, said, hist_reply, media)
         if shown:
             final += "\n\n" + "\n\n".join(shown.values())
-        for p in produced_images:
-            final += f"\n{IMG_SENTINEL}{p}"
-        for p in produced_docs:
-            final += f"\n{DOC_SENTINEL}{p}"
-        return final
+        return Reply(final, produced_images, produced_docs)
 
     def handle_media(self, paths: list[str], text: str, user: str = "default",
-                     member: str = "", *, said: str | None = None) -> str:
+                     member: str = "", *, said: str | None = None) -> Reply:
         """图片/PDF + 随后文字指令 一并处理。传输层攒下来件，等用户发文字才调（来件本身不回复）。
         只给路径，工具 LLM 自选（见 Agent_Runtime/SKILL.md）。said 同 handle（缺省 = text）。"""
         if not member:
-            return ""
+            return Reply()
         parts = [f"材料{i}（{'PDF' if Path(p).suffix.lower() == '.pdf' else '图片'}）: {p}"
                  for i, p in enumerate(paths, 1)]
         routes = "\n".join(f"{i}) {r}" for i, r in enumerate(REGISTRY.image_routes, 1))
@@ -552,12 +448,12 @@ class Agent:
     def _persist_llm_override(self, user: str) -> bool:
         """写回状态文件：先重读合并（另一传输进程的切换不被覆盖），再原子写。"""
         try:
-            on_disk = _load_llm_overrides()
+            on_disk = _llm.load_overrides()
             if user in self._llm_overrides:
                 on_disk[user] = self._llm_overrides[user]
             else:
                 on_disk.pop(user, None)
-            _save_llm_overrides(on_disk)
+            _llm.save_overrides(on_disk)
             return True
         except Exception:
             _log.warning("LLM 覆盖状态写回失败", exc_info=True)
@@ -572,7 +468,7 @@ class Agent:
 
     def _call_llm(self, messages, user: str = "") -> dict | None:
         """返回 choices[0].message dict（可能含 tool_calls）；失败 None。"""
-        return _llm.chat(messages, TOOL_SCHEMAS, *self._llm_settings(user))
+        return _llm.chat(messages, REGISTRY.schemas, *self._llm_settings(user))
 
     def _save_history(self, user, turn_msgs: list[dict]):
         """整轮消息（user → 中间 assistant/tool → 最终 assistant）追加进历史。
@@ -593,7 +489,7 @@ class Agent:
 # ── 测试入口 ────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("Family Assistant — Agent Core 测试模式")
+    print("FAM — Agent Core 测试模式")
     print("频道无关，全量上下文，跟 CodeWhale 一样的工作方式。")
     print(_llm.ready_note())
     print("-" * 40)
@@ -605,5 +501,5 @@ if __name__ == "__main__":
             break
         if msg.lower() in ("quit", "exit", "q"):
             break
-        print(agent.handle(msg, member="本地测试"))
+        print(agent.handle(msg, member="本地测试").text)
         print()

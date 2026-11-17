@@ -27,7 +27,7 @@ import mail_draft as _draft
 import mail_rules as _rules
 import mail_watch as _watch
 
-_log = logging.getLogger("familyassist.agent")
+_log = logging.getLogger("fam.agent")
 
 ORDER = 70
 
@@ -216,7 +216,7 @@ def _resolve_attachments(raw, member: str) -> tuple[list[str], str]:
 
 
 def _turn(args) -> dict:
-    """本轮身份（agent_core._apply_context 注入）：草稿记下它，闸门据此认"下一轮"。
+    """本轮身份（skill_registry.Registry.arguments 注入）：草稿记下它，闸门据此认"下一轮"。
 
     缺失 = 0/""，与任何真实轮次都对不上 → 发送被拒（漏注入时失败在安全的一侧）。
     """

@@ -26,7 +26,7 @@ import paths as _paths
 CLIP = 500    # 回读时每条文字最多字符数
 EMPTY = "（没有对话记录）"
 
-_log = logging.getLogger("familyassist.agent")
+_log = logging.getLogger("fam.agent")
 _thread_lock = threading.Lock()
 _LOCK_AT = 0x7FFFFFFF   # Windows 锁是强制锁：锁文件尾外一字节，不挡 _rows 读正文
 

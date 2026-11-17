@@ -6,24 +6,43 @@ pdf-edit = 渲染/OCR + 排版 LLM（至多两次 120s 调用）+ 重组 PDF：�
 
 from __future__ import annotations
 
+import os
+import tempfile
+
 import tool_runtime as rt
 from tool_runtime import fn, s
 
 ORDER = 95
 
-COMMANDS = {"pdf-inspect", "pdf-edit", "pdf-list", "pdf-pages"}
-CLI_TIMEOUTS = {"pdf-inspect": 120, "pdf-edit": 300}
+COMMANDS = {"pdf-inspect", "pdf-edit", "pdf-list", "pdf-pages", "pdf-create"}
+CLI_TIMEOUTS = {"pdf-inspect": 120, "pdf-edit": 300, "pdf-create": 90}
+
+
+def tool_create_pdf(args):
+    """HTML 走临时文件交 CLI：整页 HTML 常超 Windows 命令行 32767 字符上限。"""
+    args = dict(args)
+    html = str(args.pop("html", "") or "")
+    fd, tmp = tempfile.mkstemp(suffix=".html", prefix="fam_create_")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(html)
+        return rt.run_cli("pdf-create", {**args, "html-file": tmp})
+    finally:
+        os.unlink(tmp)
+
 
 TOOLS = {
     "inspect_pdf": "pdf-inspect",
     "edit_pdf": "pdf-edit",
     "pdf_edit_list": "pdf-list",
     "pdf_pages": "pdf-pages",
+    "create_pdf": tool_create_pdf,
 }
 
 MEMBER_LOCKED = set(TOOLS)
-DOC_TOOLS = {"edit_pdf"}
-UNTRUSTED_TOOLS = {"inspect_pdf", "edit_pdf"}   # 来件 PDF 的字段/OCR 文本、排版模型转述
+DOC_TOOLS = {"edit_pdf", "create_pdf"}
+# 来件 PDF 的字段/OCR 文本、排版模型转述；create_pdf 警告回显 HTML 里的图片地址（HTML 可能转述外部文本）
+UNTRUSTED_TOOLS = {"inspect_pdf", "edit_pdf", "create_pdf"}
 
 SCHEMAS = [
     fn("inspect_pdf", "看一份 PDF 是什么类型、几页、里面要填什么（表单字段或各页文字）。"
@@ -44,12 +63,23 @@ SCHEMAS = [
         "fresh": rt.boolean("true = 丢开这份 PDF 之前的编辑，从原件重新开始"),
     }, ["instruction"]),
     fn("pdf_edit_list", "列出我的 PDF 编辑会话（找回 session 续改用）。", {}),
+    fn("create_pdf", "从零做一份新 PDF（传单、合同、通知、表格、海报等）：你写整页 HTML/CSS，"
+       "工具用浏览器打印成 PDF，并把 PDF 和第 1 页预览图发给用户。改已有 PDF 用 edit_pdf。", {
+        "html": s("完整自包含的 HTML 文档（CSS 写在 <style> 里）。@page 设纸张/边距（默认 A4）；"
+                  "中文字体 font-family: \"Microsoft YaHei\", \"SimSun\", sans-serif；"
+                  "图形用 CSS/内联 SVG；图片只能用 data 内路径（如 <img src=\"Jim/inbox/2026-11/logo.png\">），"
+                  "网址图片和 JavaScript 会被去掉；表单 = 画线/方框供手填"),
+        "title": s("文件名（不带 .pdf），如 \"租房合同\"；续改不传则沿用"),
+        "session": s("上次 create_pdf 返回的 session（修改同一份时传，并传改好的完整 HTML）"),
+    }, ["html"]),
 ]
 
 PROMPT_RULES = [
     "填/改 PDF：不知道表里要什么先 inspect_pdf；**一条消息里把缺的值一起问**，绝不编造值。"
     "没签名图或让你代签 → 用本人姓名手写体签，别推说签不了。全部编辑写进一句 instruction 调 edit_pdf；"
     "更正就带同一 session 只写更正。结果里的 `提示:`/`警告:` 原意转述",
+    "做新 PDF（传单/合同/通知等，没有原件）→ create_pdf，内容排版由你定；用户要改就带同一 session "
+    "传改好的完整 HTML。用户看到的是 PDF 和预览图，别把 HTML 源码发给用户",
 ]
 
 IMAGE_ROUTES = [

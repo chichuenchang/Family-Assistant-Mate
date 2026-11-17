@@ -43,13 +43,9 @@ Calendar REST API v3 + Tasks REST API v1 + OAuth refresh token）。
 
 from __future__ import annotations
 
-import json
 import os
 import sys
-import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -67,19 +63,15 @@ if sys.platform == "win32":
 
 SCOPES = ("https://www.googleapis.com/auth/calendar.events "
           "https://www.googleapis.com/auth/tasks")
-TOKEN_URL = "https://oauth2.googleapis.com/token"
 CAL_API = "https://www.googleapis.com/calendar/v3"
 TASKS_API = "https://tasks.googleapis.com/tasks/v1"
 TASK_LIST = "@default"
 
-# 进程内缓存（access token ~1h 有效）
-_token_cache: dict = {"access": None, "exp": 0.0}
+_ACCOUNT = google_oauth.GoogleAccount("GCAL")
 
 
 def is_configured() -> bool:
-    """三个环境变量齐备即视为已配置。"""
-    return all(os.environ.get(v) for v in
-               ("GCAL_CLIENT_ID", "GCAL_CLIENT_SECRET", "GCAL_REFRESH_TOKEN"))
+    return _ACCOUNT.is_configured()
 
 
 def _calendar_id() -> str:
@@ -95,51 +87,15 @@ def _tz_offset() -> str:
     return f"{sign}{total // 3600:02d}:{(total % 3600) // 60:02d}"
 
 
-def _http(method: str, url: str, data: bytes | None = None,
-          headers: dict | None = None) -> tuple[int, bytes]:
-    """唯一 HTTP 出口（测试在此打桩）。返回 (status, body)。"""
-    req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-
-
-def _token() -> str:
-    """refresh token 换 access token，进程内缓存到过期前 1 分钟。"""
-    if _token_cache["access"] and time.time() < _token_cache["exp"]:
-        return _token_cache["access"]
-    data = urllib.parse.urlencode({
-        "client_id": os.environ["GCAL_CLIENT_ID"],
-        "client_secret": os.environ["GCAL_CLIENT_SECRET"],
-        "refresh_token": os.environ["GCAL_REFRESH_TOKEN"],
-        "grant_type": "refresh_token",
-    }).encode()
-    status, body = _http("POST", TOKEN_URL, data,
-                         {"Content-Type": "application/x-www-form-urlencoded"})
-    if status != 200:
-        raise RuntimeError(f"Google OAuth token 刷新失败 {status}: {body[:200]!r}")
-    tok = json.loads(body)
-    _token_cache["access"] = tok["access_token"]
-    _token_cache["exp"] = time.time() + int(tok.get("expires_in", 3600)) - 60
-    return _token_cache["access"]
-
-
 def _api(method: str, url: str, payload: dict | None = None,
          ok_missing: bool = False) -> dict:
     """带认证调 API。ok_missing=True 时 404/410 视为成功（幂等删除/完成）。"""
-    headers = {"Authorization": f"Bearer {_token()}"}
-    data = None
-    if payload is not None:
-        data = json.dumps(payload, ensure_ascii=False).encode()
-        headers["Content-Type"] = "application/json"
-    status, body = _http(method, url, data, headers)
-    if ok_missing and status in (404, 410):
-        return {}
-    if status >= 300:
-        raise RuntimeError(f"Google API {method} {url} → {status}: {body[:200]!r}")
-    return json.loads(body) if body else {}
+    try:
+        return _ACCOUNT.json(method, url, payload)
+    except google_oauth.GoogleApiError as e:
+        if ok_missing and e.status in (404, 410):
+            return {}
+        raise
 
 
 # ── 活动（Google Calendar） ─────────────────────────────────────

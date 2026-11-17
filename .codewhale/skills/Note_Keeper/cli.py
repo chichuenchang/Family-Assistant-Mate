@@ -1,5 +1,5 @@
 """
-Family Assistant — Note Keeper CLI
+FAM — Note Keeper CLI
 
 个人备忘记录/检索/置顶。Agent 经白名单子命令调用，输出纯文本。
 用法: python .codewhale/skills/Note_Keeper/cli.py <command> [args]
@@ -311,7 +311,7 @@ def cmd_chart_render(args):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Family Assistant — Note Keeper CLI")
+    parser = argparse.ArgumentParser(description="FAM — Note Keeper CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("note-add", help="添加一条备忘")
@@ -425,8 +425,8 @@ def main() -> int:
     try:
         dispatch[args.command](args)
     except ValueError as e:
-        # 用 [错误] 前缀（与各 skill 统一）：agent_core 收集器据此判失败，
-        # 否则失败的 visualize_data 会被当成功路径误收为 \x01IMG: 哨兵。
+        # 用 [错误] 前缀（与各 skill 统一）：skill_registry.Registry.call 据此判失败，
+        # 否则失败的 visualize_data 会被当成功路径误收进 Reply.images。
         print(f"[错误] {e}", file=sys.stderr)
         return 1
     return 0

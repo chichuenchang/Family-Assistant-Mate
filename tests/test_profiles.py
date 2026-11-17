@@ -115,22 +115,21 @@ class TestAgentWiring:
     def test_commands_allowed_and_routed(self):
         import agent_core
         for c in ("profile-set", "profile-unset", "profile-list"):
-            assert c in agent_core.ALLOWED_COMMANDS
-            assert agent_core._cli_path(c).parent.name == "Document_Keeper"
+            assert c in agent_core.rt.ALLOWED
+            assert agent_core.rt.cli_path(c).parent.name == "Document_Keeper"
 
     def test_tools_registered(self):
         import agent_core
-        names = {t["function"]["name"] for t in agent_core.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in agent_core.REGISTRY.schemas}
         assert {"set_profile_field", "remove_profile_field"} <= names
-        assert {"set_profile_field", "remove_profile_field"} <= set(agent_core._TOOL_MAP)
+        assert {"set_profile_field", "remove_profile_field"} <= set(agent_core.REGISTRY.tool_map)
 
     def test_not_member_injected(self):
         # 目标成员是显式数据（member-name），不能被发送者身份覆盖
         import agent_core
-        out = agent_core._apply_member(
+        out = agent_core.REGISTRY.arguments(
             "set_profile_field",
-            {"member-name": "Euphie", "field": "生日", "value": "2016-10-18"},
-            "Jim Zheng")
+            {"member-name": "Euphie", "field": "生日", "value": "2016-10-18"}, agent_core.Caller(member="Jim Zheng"))
         assert "member" not in out
         assert out["member-name"] == "Euphie"
 

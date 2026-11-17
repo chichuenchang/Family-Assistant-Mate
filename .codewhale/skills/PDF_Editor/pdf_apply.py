@@ -1,5 +1,5 @@
 """
-Family Assistant — 把 ops 应用到原始 PDF（PDF_Editor）。
+FAM — 把 ops 应用到原始 PDF（PDF_Editor）。
 
 顺序：页序列重建（reorder → insert → delete，全用原始页号）→ 表单字段原生填写
 （pypdf）→ 逐页 reportlab 覆盖层 merge_page → 旋转。原页字节不动，输出保持矢量。

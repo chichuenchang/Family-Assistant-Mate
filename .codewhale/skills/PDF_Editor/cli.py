@@ -1,8 +1,9 @@
 """
-Family Assistant — PDF Editor CLI
+FAM — PDF Editor CLI
 
 一句指令改 PDF：填表单、写字、打勾、白底覆盖、贴签名、画线、删页/旋转/重排/合并。
 一次编辑 = 一个会话（data/<成员>/pdf_edits/<id>/），续改带同一会话即可。
+pdf-create：HTML → 新 PDF（data/<成员>/pdf_creates/<id>/，见 pdf_create.py）。
 
 用法: python .codewhale/skills/PDF_Editor/cli.py <command> [args]
 
@@ -11,14 +12,17 @@ pypdfium2（版面文字坐标）/ 腾讯云 OCR（扫描页坐标）
 """
 
 import argparse
+import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); import bootstrap  # noqa: E402,E702  挂全部 skill 目录
 
 import paths as _paths
 import pdf_apply
+import pdf_create
 import pdf_layout
 import pdf_plan
 import tool_runtime as rt
@@ -68,7 +72,7 @@ def _session_for_file(file: str, member: str, fresh: bool = False) -> dict:
 
 def _latest_or_die(member: str, why: str) -> tuple[dict, str]:
     """LLM 跨消息容易忘掉/编造会话 id：兜底接续该成员最近的会话。
-    返回 (会话, 提示)；提示由调用方印在路径行之后（stdout 首行=路径，哨兵契约；
+    返回 (会话, 提示)；提示由调用方印在路径行之后（stdout 首行=路径，DOC_TOOLS 契约；
     stderr 在成功时被 run_cli 丢掉，Agent 看不到）。"""
     sessions = pdf_plan.list_sessions(member)
     if not sessions:
@@ -152,12 +156,67 @@ def cmd_edit(args):
     plan["out"] = _paths.to_rel(out)
     pdf_plan.save(plan)
     _mark_backup_dirty()
-    print(plan["out"])                           # 第一行 = 路径（哨兵契约）
+    print(plan["out"])                           # 第一行 = 路径（DOC_TOOLS 契约）
     print(f"session={plan['id']}")
     if notice:
         print(f"提示: {notice}")
     for n in notes:
         print(f"提示: {n}")
+    for w in warnings:
+        print(f"警告: {w}")
+
+
+def _create_session(member: str, sid: str) -> tuple[Path, dict, str]:
+    """→ (会话目录, meta, 提示)。给了 session 且存在 → 续用；否则新建（全量 HTML，丢了也无妨）。"""
+    if sid:
+        try:
+            d = pdf_create.session_dir(member, sid)
+            if (d / "meta.json").is_file():
+                return d, json.loads((d / "meta.json").read_text(encoding="utf-8")), ""
+        except (ValueError, OSError, json.JSONDecodeError):
+            pass
+    new = pdf_plan.new_session_id()
+    d = pdf_create.session_dir(member, new)
+    d.mkdir(parents=True, exist_ok=True)
+    notice = f"会话 {sid} 不存在，已新建 {new}" if sid else ""
+    return d, {"id": new, "title": "", "created": datetime.now().isoformat(timespec="seconds")}, notice
+
+
+def cmd_create(args):
+    try:
+        html = Path(args.html_file).read_text(encoding="utf-8")
+    except OSError as e:
+        _die(f"读不到 HTML: {e}")
+    if not html.strip():
+        _die("HTML 是空的")
+    browser = pdf_create.find_browser(rt.CONFIG.get("pdf", {}).get("browser", ""))
+    if not browser:
+        _die("找不到 Edge/Chrome，config.json pdf.browser 填浏览器路径")
+    d, meta, notice = _create_session(args.member, args.session)
+    title = pdf_create.safe_title(args.title or meta["title"])
+    clean, warnings = pdf_create.sanitize(html, lambda p: rt.resolve_sendable(p, args.member))
+    out = d / f"{title}.pdf"
+    try:
+        pdf_create.render(clean, out, browser)
+    except (RuntimeError, OSError) as e:
+        _die(f"PDF 生成失败: {e}")
+    for old in d.glob("*.pdf"):
+        if old != out:
+            old.unlink()
+    (d / "source.html").write_text(html, encoding="utf-8")
+    meta.update(title=title, updated=datetime.now().isoformat(timespec="seconds"))
+    (d / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+    png = d / "preview.png"
+    has_preview = pdf_create.preview(out, png)
+    _mark_backup_dirty()
+    print(_paths.to_rel(out))                    # 第一行 = 路径（DOC_TOOLS 契约）
+    if has_preview:
+        print(f"预览: {_paths.to_rel(png)}")
+    print(f"session={meta['id']}")
+    if notice:
+        print(f"提示: {notice}")
+    if not has_preview:
+        print("提示: 缺 pypdfium2，没有预览图")
     for w in warnings:
         print(f"警告: {w}")
 
@@ -174,7 +233,7 @@ def cmd_list(args):
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="pdf", description="Family Assistant PDF Editor")
+    ap = argparse.ArgumentParser(prog="pdf", description="FAM PDF Editor")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("pdf-inspect", help="看 PDF 类型/页数/要填什么")
@@ -194,6 +253,13 @@ def main(argv=None) -> int:
     p.add_argument("--fresh", action="store_true")
     p.add_argument("--member", required=True)
     p.set_defaults(func=cmd_edit)
+
+    p = sub.add_parser("pdf-create", help="HTML → 新 PDF（无头 Edge/Chrome）")
+    p.add_argument("--html-file", required=True)
+    p.add_argument("--title", default="")
+    p.add_argument("--session", default="")
+    p.add_argument("--member", required=True)
+    p.set_defaults(func=cmd_create)
 
     p = sub.add_parser("pdf-list", help="列出 PDF 编辑会话")
     p.add_argument("--member", required=True)

@@ -87,6 +87,10 @@
     "catchup_until": "12:00",
     "lookahead_days": 3
   },
+  "pdf": {
+    "_comment": "create_pdf（PDF_Editor pdf-create）用的无头浏览器。browser=Edge/Chrome 可执行文件路径；空 = 自动找 Edge/Chrome 默认安装位置与 PATH。",
+    "browser": ""
+  },
   "backup": {
     "enabled": true,
     "debounce_seconds": 60

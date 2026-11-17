@@ -1,5 +1,5 @@
 """
-Family Assistant — Note Keeper 可视化（worksheet → 图表 PNG）。
+FAM — Note Keeper 可视化（worksheet → 图表 PNG）。
 
 LLM 从工作表取出数字，按 spec 调本模块渲染 line/bar/pie 图。
 matplotlib 懒加载（Agg，离线渲染，数据不出本机）。图片存成员私有

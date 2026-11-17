@@ -1,5 +1,5 @@
 """
-Family Assistant — Note Keeper 数据库操作层
+FAM — Note Keeper 数据库操作层
 
 个人备忘（notes）的 SQLite CRUD。Agent / CLI 统一走这个模块。
 备忘按成员私有分库：data/<成员>/notes/notes.db（路径经 paths.member_store，CLI 据 --member 解析；db_path 参数注入）。

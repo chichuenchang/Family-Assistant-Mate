@@ -1,4 +1,4 @@
-# Family Assistant
+# FAM
 
 > 个人/家庭多功能 AI 助手。电脑上跑 Agent，手机上用微信远程操控。
 
@@ -284,10 +284,10 @@ FamilyAssistant/
 │           ├── wechat_ilink.py   ← 微信传输层
 │           └── telegram_bot.py   ← Telegram 传输层
 ├── config.json           ← 分类 & 命令白名单（git 跟踪，不含隐私）
-├── FamilyAssistant.md    ← 开发者总览（架构 / config 键表 / 运行方式）
+├── FAM.md                ← 开发者总览（架构 / config 键表 / 运行方式）
 ├── data/                 ← 全部用户数据（git 不跟踪）
 │   ├── Family/           ← 家庭共享：ledger.db（财务）、documents.db（文档+成员资料）、receipts/、documents/
-│   ├── <成员>/           ← 成员私有：notes/、inbox/、pdf_edits/（PDF 编辑会话）、cache/（可再生，不备份）
+│   ├── <成员>/           ← 成员私有：notes/、inbox/、pdf_edits/（PDF 编辑会话）、pdf_creates/（新建 PDF 会话）、cache/（可再生，不备份）
 │   ├── .state/           ← 运行时状态/凭据/日志（不备份）；路径一律经 paths.state_file
 │   └── members.json      ← 成员注册表（dir + 每成员同步偏好）
 ├── tests/                ← pytest 套件（python -m pytest）

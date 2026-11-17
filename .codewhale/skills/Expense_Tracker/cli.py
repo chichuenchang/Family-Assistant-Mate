@@ -1,5 +1,5 @@
 """
-Family Assistant — Expense Tracker CLI
+FAM — Expense Tracker CLI
 
 Agent 通过 CLI 子命令操作数据库，输出纯文本或 JSON。
 用法: python .codewhale/skills/Expense_Tracker/cli.py <command> [args]
@@ -423,7 +423,7 @@ def cmd_member_remove(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Family Assistant — Expense Tracker CLI")
+    parser = argparse.ArgumentParser(description="FAM — Expense Tracker CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # init

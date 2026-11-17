@@ -37,7 +37,7 @@ def load_config() -> dict:
 
 CONFIG = load_config()
 
-# ── 命令注册表（skill_registry.load() 填充；同一对象经 agent_core 转发给测试） ──
+# ── 命令注册表（skill_registry.load() 填充） ──
 ALLOWED: set[str] = set()            # Agent 可调的 CLI 子命令
 COMMAND_DIR: dict[str, Path] = {}    # 子命令 → skill 目录（路由）
 CLI_TIMEOUTS: dict[str, int] = {}    # 子命令 → 秒（默认 30）

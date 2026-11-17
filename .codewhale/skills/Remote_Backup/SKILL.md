@@ -107,8 +107,8 @@ token/key，凭据只能 `os.environ` 读取。
 ## 凭据丢失（备份静默停）
 
 2026-07 `GDRIVE_*` 用户环境变量无故消失，备份静默停 9 周，`dirty_since` 卡住。
-作者机器 `GDRIVE_CLIENT_ID/SECRET` = `GCAL_CLIENT_ID/SECRET`（同一 OAuth 客户端；refresh token 按 scope 各异）。
-恢复：`GCAL_*` 的 ID/SECRET 复制到 `GDRIVE_*` → `backup_provider.py --auth` → `backup-now` → `backup-verify`。
+`GDRIVE_*`、`GCAL_*` 可共用一个 OAuth 客户端（作者机器即是；refresh token 按 scope 各异）。
+共用时恢复：`GCAL_*` 的 ID/SECRET 复制到 `GDRIVE_*` → `backup_provider.py --auth` → `backup-now` → `backup-verify`。
 勿新建客户端：Console 只在创建时显示 secret；丢了在原客户端 Add secret 轮换，旧 secret 再停用。新 Cloud 项目看不到旧上传（`drive.file` 授权按项目号，同 Picker `setAppId`）。
 myaccount.google.com/permissions 撤销本应用 = Drive、Calendar token 同死，`backup_provider.py`、`calendar_provider.py` 各跑 `--auth`。
 

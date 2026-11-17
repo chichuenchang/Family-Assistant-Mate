@@ -71,7 +71,7 @@ python .codewhale/skills/Any_Search/cli.py any-images --query "praying mantis" -
 
 ## 配置（可选）
 
-- `ANYSEARCH_API_KEY`：优先级 环境变量 > 本 skill 目录 `.env`（从 `.env.example` 复制，`.env` 已 gitignore）> 匿名。设置后提升限额。申请：`https://anysearch.com/console/api-keys`。
+- `ANYSEARCH_API_KEY`：优先级 环境变量（含 `.codewhale/.env`，见 `Agent_Runtime/project_env.py`）> 本 skill 目录 `.env`（从 `.env.example` 复制，`.env` 已 gitignore）> 匿名。设置后提升限额。申请：`https://anysearch.com/console/api-keys`。
 
 ## 限制 / 注意
 

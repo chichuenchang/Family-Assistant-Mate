@@ -13,10 +13,10 @@
 ## 开启（每个要用邮箱的成员各一次）
 
 1. Google Cloud Console：启用 **Gmail API**（OAuth 客户端可复用 GCAL 的那个 Desktop app）。
-2. `setx GMAIL_CLIENT_ID "..."`、`setx GMAIL_CLIENT_SECRET "..."`（新终端生效）。
-   第二个成员用别的前缀（如 `GMAIL_WLI`），变量名与下面 `--prefix` 相应改。
+2. `.codewhale/.env` 填 `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET`。
+   第二个成员用别的前缀（如 `GMAIL_WLI`），键名与下面 `--prefix` 相应改。
 3. `python .codewhale/skills/Mail_Keeper/gmail_provider.py --auth [--prefix GMAIL]`
-   → 浏览器批准 → 按提示 `setx GMAIL_REFRESH_TOKEN "..."`。
+   → 浏览器批准 → `GMAIL_REFRESH_TOKEN` 自动写入 `.env`。
 4. `data/members.json` 给该成员加：
    `"mail": {"provider": "gmail", "cred_prefix": "GMAIL", "enabled": true, "watch": false}`。
    无 `mail` 块 = 无邮箱能力，工具拒绝；`watch: true` 才主动播报新邮件。

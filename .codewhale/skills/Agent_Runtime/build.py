@@ -7,7 +7,6 @@ Design: docs/superpowers/specs/2026-11-16-build-snapshot-design.md.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import shutil
@@ -144,8 +143,9 @@ def prune(builds: Path, keep: int = 5) -> list[str]:
     """Drop all but newest `keep` builds + crashed .tmp / leftover .del. Returns skipped."""
     if not builds.is_dir():
         return []
-    stamps = sorted(p for p in builds.iterdir() if STAMP_RE.match(p.name))
-    junk = [p for p in builds.iterdir() if p.suffix in (TMP, DEL)]
+    entries = list(builds.iterdir())
+    stamps = sorted(p for p in entries if STAMP_RE.match(p.name))
+    junk = [p for p in entries if p.suffix in (TMP, DEL)]
     return [p.name for p in stamps[:-keep] + junk if not remove_snapshot(p)]
 
 
@@ -163,9 +163,7 @@ def make_snapshot(root: Path, builds: Path, stamp: str, state: dict) -> Path:
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(root / rel, dest)
         _link_data(root, tmp)
-        (tmp / "BUILD.json").write_text(
-            json.dumps({"id": stamp, **state}, ensure_ascii=False, indent=1),
-            encoding="utf-8")
+        jsonfile.save(tmp / "BUILD.json", {"id": stamp, **state}, indent=1)
         tmp.rename(final)
     except BaseException:
         remove_snapshot(tmp)
@@ -175,8 +173,10 @@ def make_snapshot(root: Path, builds: Path, stamp: str, state: dict) -> Path:
 
 def latest(builds: Path) -> Path | None:
     """Newest complete build (stamp name + BUILD.json); .tmp / partial ignored."""
-    done = [p for p in builds.glob("*")
-            if STAMP_RE.match(p.name) and (p / "BUILD.json").is_file()] if builds.is_dir() else []
+    if not builds.is_dir():
+        return None
+    done = [p for p in builds.iterdir()
+            if STAMP_RE.match(p.name) and (p / "BUILD.json").is_file()]
     return max(done, key=lambda p: p.name, default=None)
 
 
@@ -203,7 +203,6 @@ def main(argv: list[str] | None = None) -> int:
                   *(f"  {f}" for f in state["dirty_files"]), sep="\n")
         snap = make_snapshot(ROOT, builds, datetime.now().strftime(STAMP_FMT), state)
     except (RuntimeError, OSError) as e:      # BuildError, git failure, copy / disk error
-        print(f"BUILD FAILED: {e}")
         print(f"BUILD FAILED: {e}")
         return 1
     print(f"built {snap.name} ({state['commit']}{' dirty' if state['dirty'] else ''}) -> {snap}")

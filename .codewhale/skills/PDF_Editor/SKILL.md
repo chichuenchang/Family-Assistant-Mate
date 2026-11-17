@@ -13,7 +13,7 @@
 | `pdf_apply.py` | ops → PDF：页序列重建 → pypdf 填字段 → reportlab 覆盖层 → 旋转 |
 | `pdf_create.py` | 从零做 PDF：HTML 清洗（CSP、图片内联）→ 无头 Edge/Chrome `--print-to-pdf` → 首页预览 PNG。设计 `docs/superpowers/specs/2026-11-17-pdf-create-design.md` |
 | `cli.py` | `pdf-inspect` / `pdf-edit` / `pdf-list` / `pdf-pages`（只数页，不建会话）/ `pdf-create` |
-| `agent_tools.py` | manifest：`inspect_pdf` / `edit_pdf` / `pdf_edit_list` / `pdf_pages` / `create_pdf`（HTML 经临时文件交 CLI：Windows 命令行上限 32767 字符） |
+| `agent_tools.py` | manifest：`inspect_pdf` / `edit_pdf` / `pdf_edit_list` / `pdf_pages` / `create_pdf` |
 
 ## 踩过的坑
 

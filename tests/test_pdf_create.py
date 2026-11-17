@@ -81,6 +81,12 @@ def test_csp_first_even_with_decoy_head(tmp_path):
     assert out.startswith('<!doctype html><html lang="zh"><head>')
 
 
+def test_html_attr_quote_cannot_swallow_csp(tmp_path):
+    out, _ = pdf_create.sanitize("<html lang='zh\"><b' x='>'><p>y</p>", _resolver(tmp_path))
+    assert out.startswith('<!doctype html><html lang="zh&quot;&gt;&lt;b"><head><meta charset')
+    assert out.index(pdf_create.CSP) < out.index("<p>")
+
+
 def test_bom_dropped(tmp_path):
     out, _ = pdf_create.sanitize("﻿<!doctype html><p>x</p>", _resolver(tmp_path))
     assert "﻿" not in out
@@ -127,6 +133,21 @@ def test_render_real_browser(tmp_path):
     doc.close()
     png = tmp_path / "p.png"
     assert pdf_create.preview(out, png) and png.read_bytes()[:4] == b"\x89PNG"
+
+
+def test_render_cannot_read_local_file(tmp_path):
+    """端到端：CSP 被吞时 iframe 能把本机文件印进 PDF。"""
+    pypdfium2 = pytest.importorskip("pypdfium2")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOPSECRET42", encoding="utf-8")
+    html, _ = pdf_create.sanitize(f"<html x='>'><iframe src=\"{secret.as_uri()}\"></iframe>"
+                                  "<p>visible</p>", lambda s: None)
+    out = tmp_path / "o.pdf"
+    pdf_create.render(html, out, pdf_create.find_browser())
+    doc = pypdfium2.PdfDocument(str(out))
+    text = doc[0].get_textpage().get_text_range()
+    doc.close()
+    assert "visible" in text and "TOPSECRET42" not in text
 
 
 def test_render_timeout_kills(tmp_path, monkeypatch):

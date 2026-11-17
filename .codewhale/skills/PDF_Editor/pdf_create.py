@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 import uuid
 from datetime import datetime
+from html import escape
 from pathlib import Path
 from typing import Callable
 
@@ -33,8 +34,10 @@ _HEAD_META = (f'<meta charset="utf-8">'
 _SCRIPT_RE = re.compile(r"<script\b.*?(?:</script\s*>|$)", re.I | re.S)
 # 一切 http-equiv 都剥：值可用实体编码（&#114;efresh）绕过按值匹配；CSP 由我们自己注入
 _HTTP_EQUIV_RE = re.compile(r"<meta\b[^>]*http-equiv[^>]*>", re.I)
-_SHELL_RE = re.compile(r"<!doctype[^>]*>|<html\b[^>]*>|<head\b[^>]*>", re.I)
-_HTML_ATTRS_RE = re.compile(r"<html\b([^>]*)>", re.I)
+_ATTRS = r"""(?:"[^"]*"|'[^']*'|[^'">])*"""     # 标签体：引号里的 > 不结束标签
+_SHELL_RE = re.compile(rf"<!doctype[^>]*>|<(?:html|head)(?=[\s/>]){_ATTRS}>", re.I)
+_HTML_TAG_RE = re.compile(rf"<html(?=[\s/>]){_ATTRS}>", re.I)
+_KEEP_ATTR_RE = re.compile(r"""\b(lang|dir)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))""", re.I)
 _BASE_RE = re.compile(r"<base\b[^>]*>", re.I)
 _IMG_RE = re.compile(r"<img\b[^>]*>", re.I)
 _SRC_RE = re.compile(r"""\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
@@ -103,9 +106,13 @@ def sanitize(html: str, resolve_src: Callable[[str], str | None]) -> tuple[str, 
 
 def _inject_head(html: str) -> str:
     """重建文档壳，CSP 恒为第一个 head 子元素。不找原 <head> 插：注释/<title> 里的假 <head>
-    会把 CSP 骗进文本里失效。原 <html> 属性（lang 影响 CJK 字形）保留。"""
-    m = _HTML_ATTRS_RE.search(html)
-    attrs = m.group(1) if m else ""
+    会把 CSP 骗进文本里失效。原 <html> 只留 lang/dir（lang 影响 CJK 字形），转义重写：
+    原样搬属性则 <html x='> 的引号把 CSP 吞进属性值（实测 iframe 读出本机文件）。"""
+    keep: dict[str, str] = {}
+    if m := _HTML_TAG_RE.search(html):
+        for a in _KEEP_ATTR_RE.finditer(m.group(0)):
+            keep.setdefault(a.group(1).lower(), next(g for g in a.groups()[1:] if g is not None))
+    attrs = "".join(f' {k}="{escape(v, quote=True)}"' for k, v in keep.items())
     return f"<!doctype html><html{attrs}><head>{_HEAD_META}" + _SHELL_RE.sub("", html)
 
 

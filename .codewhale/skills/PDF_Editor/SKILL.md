@@ -38,7 +38,7 @@
 - 无头浏览器必须带独立 `--user-data-dir`：共用 profile 时任务交给已在跑的浏览器。Edge 157 实测单页 ~3s。
 - 浏览器默认在页眉页脚印 URL + 日期：`--no-pdf-header-footer` 关（新版 Chromium 旗标名）。
 - CSP 管不到导航：`<meta http-equiv=refresh>` / `<base>` 能把页面带到 `file:///` 把本机文件印进 PDF。剥掉**一切** http-equiv（值可写 `&#114;efresh` 绕过按值匹配）。
-- CSP 不能找原 `<head>` 插：注释/`<title>` 里的假 `<head>` 让 CSP 成文本失效（iframe 即可读本机文件）。故重建壳 `<!doctype><html 原属性><head>CSP…`；BOM 须先删，否则落进 head 成文本、页顶白条。
+- CSP 不能找原 `<head>` 插：注释/`<title>` 里的假 `<head>` 让 CSP 成文本失效（iframe 即可读本机文件）。故重建壳 `<!doctype><html lang/dir><head>CSP…`（原属性不搬：引号吞 CSP，见 `_inject_head`）；BOM 须先删，否则落进 head 成文本、页顶白条。
 - LLM 忘/编会话 id 是常态：`pdf-edit` 兜底接续最近会话，提示走 stderr（stdout 首行是路径，DOC_TOOLS 契约）。
 
 ## 会话

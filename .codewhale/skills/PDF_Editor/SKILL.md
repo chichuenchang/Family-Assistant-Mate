@@ -11,8 +11,9 @@
 | `pdf_boxes.py` | 「目标」：渲染页找闭合格子 + 方框字形 → 空格/勾选框/标签格 id，排版 LLM 只挑 id |
 | `pdf_plan.py` | 会话存储；instruction + 版面 → 完整 ops（`llm_client.chat`）；ops 校验 |
 | `pdf_apply.py` | ops → PDF：页序列重建 → pypdf 填字段 → reportlab 覆盖层 → 旋转 |
-| `cli.py` | `pdf-inspect` / `pdf-edit` / `pdf-list` / `pdf-pages`（只数页，不建会话） |
-| `agent_tools.py` | manifest：`inspect_pdf` / `edit_pdf` / `pdf_edit_list` / `pdf_pages` |
+| `pdf_create.py` | 从零做 PDF：HTML 清洗（CSP、图片内联）→ 无头 Edge/Chrome `--print-to-pdf` → 首页预览 PNG。设计 `docs/superpowers/specs/2026-11-17-pdf-create-design.md` |
+| `cli.py` | `pdf-inspect` / `pdf-edit` / `pdf-list` / `pdf-pages`（只数页，不建会话）/ `pdf-create` |
+| `agent_tools.py` | manifest：`inspect_pdf` / `edit_pdf` / `pdf_edit_list` / `pdf_pages` / `create_pdf`（HTML 经临时文件交 CLI：Windows 命令行上限 32767 字符） |
 
 ## 踩过的坑
 
@@ -34,12 +35,18 @@
 - pdfium `get_rect` 遇逐字定位的 PDF 一字一框（实测一页 953 框、647 单字）。曾全书共用 800 行预算：第 1 页吃光，后页全瞎。现逐字拼行 + 1600 行各页均分（单页 ≤ 400）：不封顶 12 页 × 400 行 ≈ 80 万字符进 prompt（实测带坐标 ~175 字符/行）。
 - 勾选框常是字形（`⬜` `❑`），不是线：从文字层取，不靠渲染。
 - DeepSeek `deepseek-flash` 收图（`input_modalities` 含 image），认得出表格结构，但给框偏 50–150px，0–1000 归一化更差；每页 ~65s、16k 推理 token。不用它定位。
+- 无头浏览器必须带独立 `--user-data-dir`：共用 profile 时任务交给已在跑的浏览器。Edge 157 实测单页 ~3s。
+- 浏览器默认在页眉页脚印 URL + 日期：`--no-pdf-header-footer` 关（新版 Chromium 旗标名）。
+- CSP 管不到导航：`<meta http-equiv=refresh>` / `<base>` 能把页面带到 `file:///` 把本机文件印进 PDF。剥掉**一切** http-equiv（值可写 `&#114;efresh` 绕过按值匹配）。
+- CSP 不能找原 `<head>` 插：注释/`<title>` 里的假 `<head>` 让 CSP 成文本失效（iframe 即可读本机文件）。故重建壳 `<!doctype><html 原属性><head>CSP…`；BOM 须先删，否则落进 head 成文本、页顶白条。
 - LLM 忘/编会话 id 是常态：`pdf-edit` 兜底接续最近会话，提示走 stderr（stdout 首行是路径，DOC_TOOLS 契约）。
 
 ## 会话
 
 `data/<成员>/pdf_edits/<id>/`：`plan.json`（ops + 指令历史）、`layout.json`（版面缓存，续改不重跑 OCR）、`<原名>_edited.pdf`。
 同一源 PDF 再次传 `file` 会续用最近会话；`fresh=true` 重开。
+
+`data/<成员>/pdf_creates/<id>/`：`source.html`（原样）、`meta.json`、`<标题>.pdf`、`preview.png`。续改 = 同 session + 完整新 HTML；session 不存在则新建 + `提示:`。
 
 ## 限制
 

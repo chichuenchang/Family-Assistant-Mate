@@ -1,5 +1,5 @@
 """
-Family Assistant — Calendar Keeper CLI
+FAM — Calendar Keeper CLI
 
 家庭日程/待办直连远程日历（remote_schedule），无本地缓存。
 Agent 经白名单子命令调用，输出纯文本；失败写 stderr，退出码 1。
@@ -179,7 +179,7 @@ def cmd_cal_status(args):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Family Assistant — Calendar Keeper CLI")
+    parser = argparse.ArgumentParser(description="FAM — Calendar Keeper CLI")
     sub = parser.add_subparsers(dest="command", required=True)
     id_help = "条目 id，照列表原样传（e:… 活动 / t:… 待办）"
 

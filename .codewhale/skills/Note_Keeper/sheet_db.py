@@ -1,5 +1,5 @@
 """
-Family Assistant — Note Keeper 工作表（worksheet）数据库操作层。
+FAM — Note Keeper 工作表（worksheet）数据库操作层。
 
 命名工作表，按成员私有，两种 kind：
   - kv    : 事实清单，字段 set/unset/overwrite（kv_data JSON）

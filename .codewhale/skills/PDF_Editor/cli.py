@@ -1,5 +1,5 @@
 """
-Family Assistant — PDF Editor CLI
+FAM — PDF Editor CLI
 
 一句指令改 PDF：填表单、写字、打勾、白底覆盖、贴签名、画线、删页/旋转/重排/合并。
 一次编辑 = 一个会话（data/<成员>/pdf_edits/<id>/），续改带同一会话即可。
@@ -174,7 +174,7 @@ def cmd_list(args):
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="pdf", description="Family Assistant PDF Editor")
+    ap = argparse.ArgumentParser(prog="pdf", description="FAM PDF Editor")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("pdf-inspect", help="看 PDF 类型/页数/要填什么")

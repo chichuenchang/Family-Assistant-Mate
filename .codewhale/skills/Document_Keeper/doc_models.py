@@ -1,5 +1,5 @@
 """
-Family Assistant — Document Keeper 数据模型定义
+FAM — Document Keeper 数据模型定义
 
 家庭重要文档（租约/保险/证件等）的 SQLite 表结构。
 文档类型 / 存档目录 / 提醒提前天数 全部来自项目根 config.json（单一事实来源）。

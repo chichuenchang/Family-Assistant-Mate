@@ -1,4 +1,4 @@
-# Family Assistant
+# FAM
 
 > 个人/家庭多功能 AI 助手。电脑上跑 Agent，手机上用微信远程操控。
 

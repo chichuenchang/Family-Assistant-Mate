@@ -1,6 +1,6 @@
 # Agent Runtime
 
-> Agent 运行时 skill：频道无关的 `Agent` 大脑 + 各远程频道传输层（微信、Telegram、未来其他）。让用户从手机上通过各类聊天软件远程操控电脑上的 Family Assistant。核心思想：**一个频道无关的 Agent，多个轻量传输层**。
+> Agent 运行时 skill：频道无关的 `Agent` 大脑 + 各远程频道传输层（微信、Telegram、未来其他）。让用户从手机上通过各类聊天软件远程操控电脑上的 FAM。核心思想：**一个频道无关的 Agent，多个轻量传输层**。
 
 ## 概述
 

@@ -159,7 +159,7 @@ def _build_system_prompt(idle_clear_hours: float | None = None) -> str:
     sections = "\n\n".join(REGISTRY.prompt_sections)
     rules = "\n".join(f"- {r}" for r in [*REGISTRY.prompt_rules, *_CORE_RULES])
 
-    return f"""你是 Family Assistant，一个运行在微信/Telegram 等远程频道里的个人/家庭 AI 助手。
+    return f"""你是 FAM，一个运行在微信/Telegram 等远程频道里的个人/家庭 AI 助手。
 
 ## 你是谁
 - 你可以帮用户记账、查账、汇总开销、管理定期存款、查询汇率、OCR 票据、记私人备忘等
@@ -489,7 +489,7 @@ class Agent:
 # ── 测试入口 ────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("Family Assistant — Agent Core 测试模式")
+    print("FAM — Agent Core 测试模式")
     print("频道无关，全量上下文，跟 CodeWhale 一样的工作方式。")
     print(_llm.ready_note())
     print("-" * 40)

@@ -1,5 +1,5 @@
 """
-微信 iLink Bot 传输层 — 将微信消息接入 Family Assistant。
+微信 iLink Bot 传输层 — 将微信消息接入 FAM。
 
 基于 weixin-ilink SDK（腾讯 iLink Bot 协议的 Python 实现）。
 扫码登录，长轮询，零 OpenClaw 依赖。
@@ -474,7 +474,7 @@ def run_bot(relogin: bool = False, account: str | None = None) -> None:
 
 def run_test() -> None:
     """本地命令行测试，无需微信。"""
-    print("Family Assistant — 微信通道测试模式")
+    print("FAM — 微信通道测试模式")
     print("全量上下文 Agent，跟 CodeWhale 一样的工作方式。")
     import llm_client
     print(llm_client.ready_note())

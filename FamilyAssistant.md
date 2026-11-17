@@ -1,4 +1,4 @@
-# Family Assistant
+# FAM
 
 > 个人/家庭多功能助手。技能拆分为独立 skill；本文档与各 SKILL.md 面向开发者，
 > 运行时 Agent 不读取它们（见下"运行时提示词"）。

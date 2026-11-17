@@ -151,6 +151,15 @@ def test_existing_stamp_raises(repo, builds):
     assert (snap / "BUILD.json").is_file()
 
 
+def test_absolute_data_root_no_junction(repo, builds, tmp_path):
+    ext = tmp_path / "ext_data"
+    ext.mkdir()
+    _write(repo, "config.json", json.dumps({"data_root": str(ext)}))
+    snap = _snap(repo, builds, STAMP)
+    assert not (snap / "data").exists()
+    assert not [p for p in snap.rglob("*") if os.path.isjunction(p)]
+
+
 def test_missing_data_raises_no_leftover(repo, builds):
     shutil.rmtree(repo / "data")
     with pytest.raises(build.BuildError):

@@ -51,7 +51,8 @@ def check(root: Path) -> list[str]:
     comp = _run([sys.executable, "-m", "compileall", "-q", CODE_DIR], root)
     if comp.returncode:
         errors += [ln for ln in (comp.stdout + comp.stderr).splitlines() if ln.strip()]
-    flakes = _run([sys.executable, "-m", "pyflakes", CODE_DIR], root)
+    # -W: py3.12 SyntaxWarning (bad escape) lands on stderr, rc 0; not a gate error
+    flakes = _run([sys.executable, "-W", "ignore::SyntaxWarning", "-m", "pyflakes", CODE_DIR], root)
     errors += [ln for ln in flakes.stdout.splitlines() if "undefined name" in ln]
     # stderr = pyflakes crashed / missing (or syntax error, already caught): never pass silently
     errors += [f"pyflakes: {ln}" for ln in flakes.stderr.splitlines() if ln.strip()]

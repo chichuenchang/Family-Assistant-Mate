@@ -84,6 +84,11 @@ def test_check_passes_clean_tree(repo):
     assert build.check(repo) == []
 
 
+def test_check_ignores_syntax_warning(repo):
+    _write(repo, ".codewhale/skills/X/w.py", 'import re\nx = re.compile("\\d+")\n')
+    assert build.check(repo) == []
+
+
 def test_check_fails_when_pyflakes_unavailable(repo, monkeypatch):
     real = build._run
 

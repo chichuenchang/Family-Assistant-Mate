@@ -1,5 +1,5 @@
 """
-Telegram Bot 传输层 — 通过 Telegram 与 Family Assistant 通信。
+Telegram Bot 传输层 — 通过 Telegram 与 FAM 通信。
 
 Telegram Bot API 是全球最开放的 IM Bot 协议：
     - 零审核、零门槛、完全免费
@@ -40,7 +40,7 @@ from agent_core import setup_logging
 from transport_base import Transport, with_quote as _with_quote
 import paths as _paths
 
-log = logging.getLogger("familyassist.telegram")
+log = logging.getLogger("fam.telegram")
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 BASE = f"https://api.telegram.org/bot{TOKEN}"
@@ -245,7 +245,7 @@ def handle_updates(t: Transport, updates: list[dict], offset: int,
         if msg.get("entities") and msg["entities"][0].get("type") == "bot_command":
             if text.strip().split()[0] == "/start":
                 send_message(chat_id,
-                    "👋 你好！我是 Family Assistant。\n"
+                    "👋 你好！我是 FAM。\n"
                     "可以直接跟我说话，比如：\n"
                     "  • \"花了45块 午餐\" — 记账\n"
                     "  • \"这个月花了多少\" — 查账\n"
@@ -348,14 +348,14 @@ def run() -> None:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Family Assistant — Telegram Bot")
+    parser = argparse.ArgumentParser(description="FAM — Telegram Bot")
     parser.add_argument("--debug", action="store_true", default=True,
                         help="开启调试日志（写 data/.state/bot_debug.log，默认开）")
     parser.add_argument("--no-debug", dest="debug", action="store_false",
                         help="关闭调试日志")
     args = parser.parse_args()
     setup_logging(args.debug)
-    print("Family Assistant — Telegram Bot")
+    print("FAM — Telegram Bot")
     print(f"Token: {'已设置' if TOKEN else '未设置'}")
     run()
 

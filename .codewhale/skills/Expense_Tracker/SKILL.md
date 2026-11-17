@@ -1,6 +1,6 @@
 # Expense Tracker
 
-> Family Assistant 的记账 skill。支持多币种日常开销、收入、投资、定期存款和报税记录管理。
+> FAM 的记账 skill。支持多币种日常开销、收入、投资、定期存款和报税记录管理。
 
 ## 代码位置
 

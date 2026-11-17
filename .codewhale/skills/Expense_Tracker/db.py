@@ -1,5 +1,5 @@
 """
-Family Assistant — Expense Tracker 数据库操作层
+FAM — Expense Tracker 数据库操作层
 
 提供 SQLite CRUD 和查询接口。Agent / CLI / 脚本统一走这个模块。
 """

@@ -21,7 +21,7 @@ import llm_providers as _providers
 import paths as _paths
 import tool_runtime as _rt
 
-_log = logging.getLogger("familyassist.agent")
+_log = logging.getLogger("fam.agent")
 
 EFFORTS = ("low", "medium", "high", "max")
 DEFAULT_MODEL = "deepseek-flash"

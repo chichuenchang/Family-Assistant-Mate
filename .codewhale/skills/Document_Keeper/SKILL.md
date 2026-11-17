@@ -1,6 +1,6 @@
 # Document Keeper
 
-> Family Assistant 的家庭文档管理 skill。归档重要/临时文档（租约、保险单、SIN、健康卡等），OCR 索引，跟踪到期日并提醒。
+> FAM 的家庭文档管理 skill。归档重要/临时文档（租约、保险单、SIN、健康卡等），OCR 索引，跟踪到期日并提醒。
 
 ## 代码位置
 

@@ -1,5 +1,5 @@
 """
-Family Assistant — Note Keeper CLI
+FAM — Note Keeper CLI
 
 个人备忘记录/检索/置顶。Agent 经白名单子命令调用，输出纯文本。
 用法: python .codewhale/skills/Note_Keeper/cli.py <command> [args]
@@ -311,7 +311,7 @@ def cmd_chart_render(args):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Family Assistant — Note Keeper CLI")
+    parser = argparse.ArgumentParser(description="FAM — Note Keeper CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("note-add", help="添加一条备忘")

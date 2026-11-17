@@ -1,5 +1,5 @@
 """
-Family Assistant — PDF 版面提取（PDF_Editor）。
+FAM — PDF 版面提取（PDF_Editor）。
 
 版面空间：视觉方向（已计 /Rotate）、左上原点、像素 = point × SCALE。
 坐标来源三种：AcroForm 字段 /Rect（pypdf）、文字层行框（pypdfium2）、

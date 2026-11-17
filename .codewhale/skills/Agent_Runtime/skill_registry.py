@@ -37,7 +37,7 @@ import bootstrap
 import context_budget as _budget
 import tool_runtime as rt
 
-log = logging.getLogger("familyassist.agent")
+log = logging.getLogger("fam.agent")
 MANIFEST_NAME = "agent_tools.py"
 ERROR_PREFIX = "[错误]"     # 工具返回以此开头 = 失败（各 skill 统一约定）
 

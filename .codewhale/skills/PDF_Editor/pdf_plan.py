@@ -1,5 +1,5 @@
 """
-Family Assistant — PDF 编辑会话 + instruction→ops（PDF_Editor）。
+FAM — PDF 编辑会话 + instruction→ops（PDF_Editor）。
 
 会话 = data/<成员>/pdf_edits/<id>/：plan.json（ops + 指令历史）、layout.json
 （版面缓存，续改不重跑 OCR）、产出 PDF。ops 永远是完整列表，从原始 PDF 重新应用。

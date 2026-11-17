@@ -1,5 +1,5 @@
 """
-Family Assistant — Document Keeper CLI
+FAM — Document Keeper CLI
 
 家庭重要文档归档/检索/到期提醒。Agent 经白名单子命令调用，输出纯文本。
 用法: python .codewhale/skills/Document_Keeper/cli.py <command> [args]
@@ -238,7 +238,7 @@ def cmd_profile_list(args):
 def main():
     doc_db.init_db(db_path=_DB_OVERRIDE)
 
-    parser = argparse.ArgumentParser(description="Family Assistant — Document Keeper CLI")
+    parser = argparse.ArgumentParser(description="FAM — Document Keeper CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("doc-add", help="归档一份文档")

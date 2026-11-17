@@ -60,7 +60,7 @@ import paths as _paths
 import skill_registry
 import tool_runtime as rt
 
-_log = logging.getLogger("familyassist.agent")
+_log = logging.getLogger("fam.agent")
 
 
 # ── config.json（值的单一事实来源；不在代码里重复硬编码） ──────
@@ -75,15 +75,15 @@ _LOG_BACKUPS = 3
 
 
 def setup_logging(debug: bool = True) -> logging.Logger:
-    """配置 "familyassist" 日志器，各传输层（telegram/wechat）调一次即可。
+    """配置 "fam" 日志器，各传输层（telegram/wechat）调一次即可。
 
     项目规范：所有 Bot 默认开调试日志（debug=True）。新增 Bot 直接 setup_logging() 即继承。
     debug=True（默认）：DEBUG 全量，同时写 stderr 和 data/.state/bot_debug.log（含完整 traceback），
                 供排查 OCR/记账/工具调用链路。
     debug=False（--no-debug）：仅 WARNING 及以上，安静运行。
-    子日志器（familyassist.telegram 等）自动继承本配置。
+    子日志器（fam.telegram 等）自动继承本配置。
     """
-    logger = logging.getLogger("familyassist")
+    logger = logging.getLogger("fam")
     logger.setLevel(logging.DEBUG if debug else logging.WARNING)
     if logger.handlers:  # 幂等：重复调用不叠加 handler
         return logger
@@ -135,7 +135,7 @@ _CORE_RULES = [
 def _build_system_prompt(idle_clear_hours: float | None = None) -> str:
     """组装 system prompt：身份 + 成员 + 各 skill 段落（manifest）+ 通用准则。
 
-    工具定义走 API tools 参数。SKILL.md / FamilyAssistant.md 是开发文档，不进 prompt。
+    工具定义走 API tools 参数。SKILL.md / FAM.md 是开发文档，不进 prompt。
     """
     # 家庭成员 + 别名/法定名（data/members.json；空注册表则整段省略）
     members_cfg = _members_registry.load_members()
@@ -159,7 +159,7 @@ def _build_system_prompt(idle_clear_hours: float | None = None) -> str:
     sections = "\n\n".join(REGISTRY.prompt_sections)
     rules = "\n".join(f"- {r}" for r in [*REGISTRY.prompt_rules, *_CORE_RULES])
 
-    return f"""你是 Family Assistant，一个运行在微信/Telegram 等远程频道里的个人/家庭 AI 助手。
+    return f"""你是 FAM，一个运行在微信/Telegram 等远程频道里的个人/家庭 AI 助手。
 
 ## 你是谁
 - 你可以帮用户记账、查账、汇总开销、管理定期存款、查询汇率、OCR 票据、记私人备忘等
@@ -489,7 +489,7 @@ class Agent:
 # ── 测试入口 ────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("Family Assistant — Agent Core 测试模式")
+    print("FAM — Agent Core 测试模式")
     print("频道无关，全量上下文，跟 CodeWhale 一样的工作方式。")
     print(_llm.ready_note())
     print("-" * 40)

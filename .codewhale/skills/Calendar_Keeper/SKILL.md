@@ -29,4 +29,4 @@
 
 ## 配置
 
-`config.json` `calendar`，键见 `FamilyAssistant.md` 配置表。测试钩子：`CALENDAR_CONFIG`、`IMAGE_GC_STATE_DIR`、`DATA_ROOT`。
+`config.json` `calendar`，键见 `FAM.md` 配置表。测试钩子：`CALENDAR_CONFIG`、`IMAGE_GC_STATE_DIR`、`DATA_ROOT`。

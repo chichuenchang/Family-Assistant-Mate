@@ -12,6 +12,7 @@ if (-not $b) { "no build - run /build first"; return }
 $id = Split-Path $b -Leaf
 $cmd = "`$Host.UI.RawUI.WindowTitle = 'FAM'; (Get-Item HKCU:\Environment).Property | ? { `$_ -ne 'Path' } | % { Set-Item ('env:'+`$_) (Get-ItemPropertyValue HKCU:\Environment `$_) }; & '$py' '$b\.codewhale\skills\Agent_Runtime\wechat_ilink.py' --mode run $ARGUMENTS"
 Start-Process powershell -WorkingDirectory $b -ArgumentList '-NoExit','-Command',$cmd
+"launched build $id"
 ```
 
 No build → reply that line, nothing launched; never fall back to repo code.

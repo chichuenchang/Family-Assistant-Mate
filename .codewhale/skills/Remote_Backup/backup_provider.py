@@ -79,29 +79,26 @@ class GoogleDriveProvider:
     def is_configured(self) -> bool:
         return self._account.is_configured()
 
-    def _api_json(self, method: str, url: str, payload: dict | None = None) -> dict:
-        return self._account.json(method, url, payload)
-
     def _folder_id(self) -> str:
         if self._folder_cache["id"]:
             return self._folder_cache["id"]
         query = (f"name = '{_q(self.remote_root)}' and mimeType = '{_FOLDER_MIME}' "
                  f"and trashed = false")
-        r = self._api_json("GET", f"{API}/files?" + urllib.parse.urlencode(
+        r = self._account.json("GET", f"{API}/files?" + urllib.parse.urlencode(
             {"q": query, "fields": "files(id)", "pageSize": 10}))
         files = r.get("files") or []
         if files:
             self._folder_cache["id"] = files[0]["id"]
         else:
-            created = self._api_json("POST", f"{API}/files",
-                                     {"name": self.remote_root, "mimeType": _FOLDER_MIME})
+            created = self._account.json("POST", f"{API}/files",
+                                         {"name": self.remote_root, "mimeType": _FOLDER_MIME})
             self._folder_cache["id"] = created["id"]
         return self._folder_cache["id"]
 
     def _find(self, remote_rel: str) -> str | None:
         query = (f"appProperties has {{ key='rel' and value='{_q(remote_rel)}' }} "
                  f"and trashed = false")
-        r = self._api_json("GET", f"{API}/files?" + urllib.parse.urlencode(
+        r = self._account.json("GET", f"{API}/files?" + urllib.parse.urlencode(
             {"q": query, "fields": "files(id)", "pageSize": 2}))
         files = r.get("files") or []
         return files[0]["id"] if files else None
@@ -110,14 +107,14 @@ class GoogleDriveProvider:
         """parent 下名为 name 的子文件夹 id，不存在则创建。"""
         query = (f"name = '{_q(name)}' and mimeType = '{_FOLDER_MIME}' "
                  f"and '{parent_id}' in parents and trashed = false")
-        r = self._api_json("GET", f"{API}/files?" + urllib.parse.urlencode(
+        r = self._account.json("GET", f"{API}/files?" + urllib.parse.urlencode(
             {"q": query, "fields": "files(id)", "pageSize": 1}))
         files = r.get("files") or []
         if files:
             return files[0]["id"]
-        created = self._api_json("POST", f"{API}/files",
-                                 {"name": name, "mimeType": _FOLDER_MIME,
-                                  "parents": [parent_id]})
+        created = self._account.json("POST", f"{API}/files",
+                                     {"name": name, "mimeType": _FOLDER_MIME,
+                                      "parents": [parent_id]})
         return created["id"]
 
     def _ensure_folder_path(self, remote_rel: str) -> str:
@@ -177,7 +174,7 @@ class GoogleDriveProvider:
                       "pageSize": 1000}
             if page_token:
                 params["pageToken"] = page_token
-            r = self._api_json("GET", f"{API}/files?" + urllib.parse.urlencode(params))
+            r = self._account.json("GET", f"{API}/files?" + urllib.parse.urlencode(params))
             for f in r.get("files", []):
                 rel = (f.get("appProperties") or {}).get("rel")
                 if rel:
@@ -213,7 +210,7 @@ class GoogleDriveProvider:
                       "pageSize": 1000}
             if page_token:
                 params["pageToken"] = page_token
-            r = self._api_json("GET", f"{API}/files?" + urllib.parse.urlencode(params))
+            r = self._account.json("GET", f"{API}/files?" + urllib.parse.urlencode(params))
             for f in r.get("files", []):
                 rel = (f.get("appProperties") or {}).get("rel")
                 if not rel:
@@ -226,7 +223,7 @@ class GoogleDriveProvider:
                 url = f"{API}/files/{f['id']}?" + urllib.parse.urlencode(
                     {"addParents": target, "removeParents": current or "",
                      "fields": "id"})
-                self._api_json("PATCH", url)
+                self._account.json("PATCH", url)
                 moved.append(rel)
             page_token = r.get("nextPageToken")
             if not page_token:

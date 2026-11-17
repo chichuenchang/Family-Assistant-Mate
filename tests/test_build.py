@@ -70,6 +70,17 @@ def test_git_state_clean_then_dirty(repo):
     assert ".codewhale/skills/X/cli.py" in st["dirty_files"]
 
 
+def test_dirty_files_are_plain_paths(repo):
+    _write(repo, ".codewhale/skills/X/a b.py", "")                  # porcelain quotes spaces
+    _write(repo, ".codewhale/skills/Y/new.py", "")                  # untracked dir collapses
+    _git(repo, "mv", ".codewhale/skills/X/cli.py", ".codewhale/skills/X/main.py")  # old -> new
+    files = build.git_state(repo)["dirty_files"]
+    for want in (".codewhale/skills/X/a b.py", ".codewhale/skills/Y/new.py",
+                 ".codewhale/skills/X/main.py"):
+        assert want in files
+    assert not [f for f in files if '"' in f or " -> " in f or f.endswith("/")]
+
+
 def test_gate_flags_syntax_error(repo):
     _write(repo, ".codewhale/skills/X/bad.py", "def(:\n")
     assert build.gate(repo)

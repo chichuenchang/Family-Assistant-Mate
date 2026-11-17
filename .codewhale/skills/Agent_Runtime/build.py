@@ -40,11 +40,16 @@ def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
                           encoding="utf-8", errors="replace")
 
 
-def _git_lines(root: Path, *args: str) -> list[str]:
-    out = _run(["git", "-c", "core.quotepath=off", *args], root)   # 中文名不转义
+def _git(root: Path, *args: str) -> str:
+    out = _run(["git", *args], root)
     if out.returncode:
         raise RuntimeError(f"git {' '.join(args)} failed: {out.stderr.strip()}")
-    return [ln for ln in out.stdout.splitlines() if ln]
+    return out.stdout
+
+
+def _fields(z_out: str) -> list[str]:
+    """Split `-z` output. -z paths are raw: no quoting (spaces), no escaping (中文)."""
+    return [f for f in z_out.split("\0") if f]
 
 
 def gate(root: Path) -> list[str]:
@@ -62,9 +67,15 @@ def gate(root: Path) -> list[str]:
 
 
 def git_state(root: Path) -> dict:
-    """Commit + dirty flag + porcelain paths. Dirty warns, never blocks."""
-    commit = _git_lines(root, "rev-parse", "--short", "HEAD")[0]
-    dirty_files = [ln[3:] for ln in _git_lines(root, "status", "--porcelain")]
+    """Commit + dirty flag + dirty paths. Dirty warns, never blocks.
+    -uall: untracked dir listed per file. Rename/copy entry = `XY new`, then old as own field."""
+    commit = _git(root, "rev-parse", "--short", "HEAD").strip()
+    dirty_files: list[str] = []
+    fields = iter(_fields(_git(root, "status", "--porcelain", "-z", "-uall")))
+    for f in fields:
+        dirty_files.append(f[3:])
+        if {"R", "C"} & set(f[:2]):
+            next(fields, None)
     return {"commit": commit, "dirty": bool(dirty_files), "dirty_files": dirty_files}
 
 
@@ -75,8 +86,9 @@ def _is_bytecode(rel: str) -> bool:
 def files_to_copy(root: Path) -> list[str]:
     """Working tree under .codewhale + config.json: tracked, untracked-not-ignored,
     plus ignored files under .codewhale (skill .env) minus bytecode."""
-    not_ignored = _git_lines(root, "ls-files", "-co", "--exclude-standard", "--", CODE_DIR, "config.json")
-    ignored = _git_lines(root, "ls-files", "-oi", "--exclude-standard", "--", CODE_DIR)
+    not_ignored = _fields(_git(root, "ls-files", "-z", "-co", "--exclude-standard",
+                               "--", CODE_DIR, "config.json"))
+    ignored = _fields(_git(root, "ls-files", "-z", "-oi", "--exclude-standard", "--", CODE_DIR))
     return sorted(rel for rel in set(not_ignored) | set(ignored)
                   if not _is_bytecode(rel) and (root / rel).is_file())
 

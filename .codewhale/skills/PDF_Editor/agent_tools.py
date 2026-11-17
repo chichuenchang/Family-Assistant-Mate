@@ -2,7 +2,6 @@
 
 编辑会话按成员私有（data/<成员>/pdf_edits/），一律强制注入发送者 member。
 pdf-edit = 渲染/OCR + 排版 LLM（至多两次 120s 调用）+ 重组 PDF：超时给足。
-create_pdf 不进 UNTRUSTED_TOOLS：输出只有自家路径/提示，不含外部文本。
 """
 
 from __future__ import annotations
@@ -42,7 +41,8 @@ TOOLS = {
 
 MEMBER_LOCKED = set(TOOLS)
 DOC_TOOLS = {"edit_pdf", "create_pdf"}
-UNTRUSTED_TOOLS = {"inspect_pdf", "edit_pdf"}   # 来件 PDF 的字段/OCR 文本、排版模型转述
+# 来件 PDF 的字段/OCR 文本、排版模型转述；create_pdf 警告回显 HTML 里的图片地址（HTML 可能转述外部文本）
+UNTRUSTED_TOOLS = {"inspect_pdf", "edit_pdf", "create_pdf"}
 
 SCHEMAS = [
     fn("inspect_pdf", "看一份 PDF 是什么类型、几页、里面要填什么（表单字段或各页文字）。"

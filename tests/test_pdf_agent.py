@@ -61,7 +61,7 @@ def test_create_pdf_registered():
     reg = agent_core.REGISTRY
     names = {t["function"]["name"] for t in reg.schemas}
     assert "create_pdf" in names and "create_pdf" in reg.tool_map
-    assert {"create_pdf"} <= reg.doc_tools & reg.member_locked
+    assert {"create_pdf"} <= reg.doc_tools & reg.member_locked & reg.untrusted_tools
     assert "pdf-create" in agent_core.rt.ALLOWED
     assert agent_core.rt.cli_path("pdf-create").parent.name == "PDF_Editor"
     assert agent_core.rt.CLI_TIMEOUTS["pdf-create"] >= 90

@@ -58,8 +58,21 @@ def test_css_url_inlined_or_blanked(tmp_path):
     html = ("<style>.a{background:url('ok/bg.png') no-repeat}"
             ".b{background:url(https://evil.example/x.png)}</style>")
     out, warns = pdf_create.sanitize(html, _resolver(tmp_path))
-    assert "url(\"data:image/png;base64," in out and "evil.example" not in out
+    assert "url(data:image/png;base64," in out and "evil.example" not in out
     assert len(warns) == 1
+
+
+def test_url_rewrite_only_in_css(tmp_path):
+    (tmp_path / "ok").mkdir()
+    build_png(tmp_path / "ok" / "bg.png")
+    html = ('<p>call url(foo) now</p><svg><rect fill="url(#g)"/></svg>'
+            '<style>.m{mask:url(#m)}</style><div style="background:url(\'ok/bg.png\')">d</div>'
+            "<img src='data:image/svg+xml,<svg xmlns=\"x\"/>'>")
+    out, warns = pdf_create.sanitize(html, _resolver(tmp_path))
+    assert "<p>call url(foo) now</p>" in out and 'fill="url(#g)"' in out and "url(#m)" in out
+    assert 'style="background:url(data:image/png;base64,' in out
+    assert "<img src='data:image/svg+xml,<svg xmlns=\"x\"/>'>" in out
+    assert warns == []
 
 
 def test_meta_refresh_base_script_stripped(tmp_path):

@@ -44,6 +44,9 @@ _KEEP_ATTR_RE = re.compile(r"""\b(lang|dir)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"
 _IMG_RE = re.compile(rf"<img(?=[\s/>]){_ATTRS}>", re.I)
 _SRC_RE = re.compile(r"""\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
 _SRCSET_RE = re.compile(r"""\s\bsrcset\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
+# url() 只在 CSS 里改写：正文字样 "url(…)"、SVG fill="url(#g)" 不碰
+_STYLE_BLOCK_RE = re.compile(r"(<style\b[^>]*>)(.*?)(</style\s*>)", re.I | re.S)
+_STYLE_ATTR_RE = re.compile(r"""(\sstyle\s*=\s*)("[^"]*"|'[^']*')""", re.I)
 _URL_RE = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"]*?))\s*\)""", re.I)
 _TITLE_BAD = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 
@@ -62,9 +65,7 @@ _BROWSER_NAMES = ("msedge", "microsoft-edge", "chrome", "google-chrome", "chromi
 # ── 清洗 ─────────────────────────────────────────────────────
 
 def _data_uri(src: str, resolve_src: Callable[[str], str | None]) -> str | None:
-    """data: 原样；否则闸门放行且是图片 → base64 data URI；其余 None。"""
-    if src.lower().startswith("data:"):
-        return src
+    """闸门放行且是图片 → base64 data URI；其余 None。"""
     p = resolve_src(src)
     if not p:
         return None
@@ -86,6 +87,8 @@ def sanitize(html: str, resolve_src: Callable[[str], str | None]) -> tuple[str, 
         tag = _SRCSET_RE.sub("", m.group(0))
         sm = _SRC_RE.search(tag)
         src = next((g for g in sm.groups() if g is not None), "") if sm else ""
+        if src.lower().startswith("data:"):
+            return tag                                   # 原样：重写引号会被 SVG data 里的引号打断
         uri = _data_uri(src, resolve_src) if src else None
         if uri is None:
             warns.append(f"图片已去掉（只能用 data 内自己/家庭的图片路径）: {src[:80] or '(无 src)'}")
@@ -94,15 +97,18 @@ def sanitize(html: str, resolve_src: Callable[[str], str | None]) -> tuple[str, 
 
     def url(m):
         src = next(g for g in m.groups() if g is not None).strip()
+        if src.startswith("#") or src.lower().startswith("data:"):
+            return m.group(0)                            # 文内片段（SVG 渐变/滤镜）、内联数据
         uri = _data_uri(src, resolve_src) if src else None
         if uri is None:
             if src:
                 warns.append(f"CSS 图片已去掉: {src[:80]}")
-            return 'url("")'
-        return f'url("{uri}")'
+            return "url()"
+        return f"url({uri})"                             # 不加引号：可能身处 style="…" 属性内
 
     html = _IMG_RE.sub(img, html)
-    html = _URL_RE.sub(url, html)
+    html = _STYLE_BLOCK_RE.sub(lambda m: m.group(1) + _URL_RE.sub(url, m.group(2)) + m.group(3), html)
+    html = _STYLE_ATTR_RE.sub(lambda m: m.group(1) + _URL_RE.sub(url, m.group(2)), html)
     return _inject_head(html), warns
 
 

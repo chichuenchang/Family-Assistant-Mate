@@ -1,4 +1,7 @@
 # tests/test_build.py — build snapshot (Agent_Runtime/build.py).
+import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -78,3 +81,76 @@ def test_check_flags_undefined_name(repo):
 
 def test_check_passes_clean_tree(repo):
     assert build.check(repo) == []
+
+
+# ── Task 2: snapshot / latest / main ───────────────────────
+
+STAMP = "20990101-120000"
+
+
+@pytest.fixture
+def builds(tmp_path) -> Path:
+    return tmp_path / "builds"
+
+
+def test_snapshot_layout(repo, builds):
+    snap = build.make_snapshot(repo, builds, STAMP)
+    assert snap == builds / STAMP
+    assert (snap / ".codewhale/skills/X/cli.py").is_file()
+    assert (snap / "config.json").is_file()
+    assert not (snap / "tests").exists()
+    meta = json.loads((snap / "BUILD.json").read_text(encoding="utf-8"))
+    assert meta["id"] == STAMP and meta["commit"] and meta["dirty"] is False
+    assert os.path.isjunction(snap / "data")
+    assert (snap / "data" / "f.txt").read_text() == "live"
+
+
+def test_snapshot_isolated_from_edits(repo, builds):
+    snap = build.make_snapshot(repo, builds, STAMP)
+    _write(repo, ".codewhale/skills/X/cli.py", "print('edited')\n")
+    assert (snap / ".codewhale/skills/X/cli.py").read_text() == "print('hi')\n"
+
+
+def test_existing_stamp_raises(repo, builds):
+    snap = build.make_snapshot(repo, builds, STAMP)
+    with pytest.raises(build.BuildError):
+        build.make_snapshot(repo, builds, STAMP)
+    assert (snap / "BUILD.json").is_file()
+
+
+def test_missing_data_raises_no_leftover(repo, builds):
+    shutil.rmtree(repo / "data")
+    with pytest.raises(build.BuildError):
+        build.make_snapshot(repo, builds, STAMP)
+    assert not builds.exists() or not any(builds.iterdir())
+
+
+def test_latest_ignores_tmp_and_incomplete(repo, builds):
+    real = build.make_snapshot(repo, builds, STAMP)
+    (builds / "20990101-130000.tmp").mkdir()
+    (builds / "20990101-130001").mkdir()          # no BUILD.json
+    assert build.latest(builds) == real
+
+
+def test_latest_none_when_empty(builds):
+    assert build.latest(builds) is None
+
+
+def test_main_check_fail_no_snapshot(repo, builds, monkeypatch):
+    monkeypatch.setattr(build, "ROOT", repo)
+    monkeypatch.setenv("FA_BUILDS_DIR", str(builds))
+    _write(repo, ".codewhale/skills/X/bad.py", "def(:\n")
+    assert build.main([]) == 1
+    assert build.latest(builds) is None
+
+
+def test_main_builds_and_warns_dirty(repo, builds, monkeypatch, capsys):
+    monkeypatch.setattr(build, "ROOT", repo)
+    monkeypatch.setenv("FA_BUILDS_DIR", str(builds))
+    _write(repo, ".codewhale/skills/X/cli.py", "print('edited')\n")
+    assert build.main([]) == 0
+    out = capsys.readouterr().out
+    assert "WARNING dirty" in out and ".codewhale/skills/X/cli.py" in out
+    assert build.latest(builds) is not None
+    assert build.main(["--latest"]) == 0
+    assert str(build.latest(builds)) in capsys.readouterr().out

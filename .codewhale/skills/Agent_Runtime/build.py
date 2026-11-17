@@ -6,12 +6,31 @@ Design: docs/superpowers/specs/2026-11-16-build-snapshot-design.md.
 
 from __future__ import annotations
 
+import argparse
+import json
+import os
+import re
+import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
+
+import jsonfile
 
 ROOT = Path(__file__).resolve().parents[3]
 CODE_DIR = ".codewhale"
+STAMP_RE = re.compile(r"^\d{8}-\d{6}$")
+
+
+class BuildError(RuntimeError):
+    """Build refused; nothing left behind."""
+
+
+def builds_dir() -> Path:
+    """FA_BUILDS_DIR (tests) else sibling <repo>-builds/ (outside repo: no pytest/grep noise)."""
+    env = os.environ.get("FA_BUILDS_DIR")
+    return Path(env) if env else ROOT.parent / f"{ROOT.name}-builds"
 
 
 def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -55,3 +74,101 @@ def files_to_copy(root: Path) -> list[str]:
     ignored = _git_lines(root, "ls-files", "-oi", "--exclude-standard", "--", CODE_DIR)
     return sorted(rel for rel in set(tracked) | set(ignored)
                   if not _skip(rel) and (root / rel).is_file())
+
+
+def _link_data(root: Path, snap: Path) -> None:
+    """<snap>/<data_root> junction → live <root>/<data_root>: same layout, ROOT = parents[3]
+    unchanged. Absolute data_root needs no link."""
+    rel = jsonfile.load_dict(root / "config.json").get("data_root") or "data"
+    if Path(rel).is_absolute():
+        return
+    live = root / rel
+    if not live.is_dir():
+        raise BuildError(f"live data dir missing: {live}")
+    link = snap / rel
+    link.parent.mkdir(parents=True, exist_ok=True)
+    out = _run(["cmd", "/c", "mklink", "/J", str(link), str(live)], snap)
+    if out.returncode:
+        raise BuildError(f"mklink /J failed: {(out.stdout + out.stderr).strip()}")
+
+
+def _unlink_junctions(d: Path) -> None:
+    """Unlink every junction under d; never descend into one (= live data)."""
+    with os.scandir(d) as it:
+        for e in it:
+            if os.path.isjunction(e.path):
+                os.rmdir(e.path)          # removes link only
+            elif e.is_dir(follow_symlinks=False):
+                _unlink_junctions(Path(e.path))
+
+
+def remove_snapshot(path: Path) -> bool:
+    """Delete snapshot. Junctions unlinked first: rmtree never walks into live data."""
+    if path.is_dir():
+        _unlink_junctions(path)
+        shutil.rmtree(path)
+    return True
+
+
+def make_snapshot(root: Path, builds: Path, stamp: str) -> Path:
+    """Copy into <stamp>.tmp, link data, write BUILD.json, rename. Fail = nothing left."""
+    final = builds / stamp
+    if final.exists():
+        raise BuildError(f"build {stamp} exists")
+    tmp = builds / f"{stamp}.tmp"
+    try:
+        tmp.mkdir(parents=True)
+        for rel in files_to_copy(root):
+            dest = tmp / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root / rel, dest)
+        _link_data(root, tmp)
+        (tmp / "BUILD.json").write_text(
+            json.dumps({"id": stamp, **git_state(root)}, ensure_ascii=False, indent=1),
+            encoding="utf-8")
+        tmp.rename(final)
+    except BaseException:
+        remove_snapshot(tmp)
+        raise
+    return final
+
+
+def latest(builds: Path) -> Path | None:
+    """Newest complete build (stamp name + BUILD.json); .tmp / partial ignored."""
+    done = [p for p in builds.glob("*")
+            if STAMP_RE.match(p.name) and (p / "BUILD.json").is_file()] if builds.is_dir() else []
+    return max(done, key=lambda p: p.name, default=None)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Snapshot code for /run-daemon.")
+    ap.add_argument("--latest", action="store_true", help="print newest build path")
+    args = ap.parse_args(argv)
+    builds = builds_dir()
+    if args.latest:
+        snap = latest(builds)
+        if snap is None:
+            print("no build", file=sys.stderr)
+            return 1
+        print(snap)
+        return 0
+    errors = check(ROOT)
+    if errors:
+        print("BUILD FAILED, no snapshot:", *errors, sep="\n")
+        return 1
+    state = git_state(ROOT)
+    if state["dirty"]:
+        print(f"WARNING dirty: {len(state['dirty_files'])} uncommitted — commit when ready",
+              *(f"  {f}" for f in state["dirty_files"]), sep="\n")
+    try:
+        snap = make_snapshot(ROOT, builds, datetime.now().strftime("%Y%m%d-%H%M%S"))
+    except BuildError as e:
+        print(f"BUILD FAILED: {e}")
+        return 1
+    print(f"built {snap.name} ({state['commit']}{' dirty' if state['dirty'] else ''}) -> {snap}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    raise SystemExit(main())

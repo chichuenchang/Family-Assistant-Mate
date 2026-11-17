@@ -55,6 +55,10 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 
 `conda run -n familyassis310 python -m pytest -q`，该 env 装全 `requirements.txt`，应 0 skip（运行时依赖仍可选）。别的 env（如 `bmore`）缺 `pypdfium2`：PDF_Editor 测试 skip，`tests/test_ocr.py` PDF 断言败（"页数未知"）。见 skip 或败先查解释器。
 
+## Google 凭据丢失
+
+步骤见 [Remote Backup SKILL.md](.codewhale/skills/Remote_Backup/SKILL.md)「凭据丢失」。Claude 代跑时：auto 模式分类器拒 Claude 复制凭据环境变量，给用户 PowerShell 块自贴 secret；浏览器、`--auth`、`backup-now`/`backup-verify` 由 Claude 跑，用户只贴 secret、点 Allow。
+
 ## 成员注册（仅本机）
 
 - `member-add <名> --telegram <chat_id> --wechat <wxid>`（可多次传同一 flag 绑多个 id）、`member-list`、`member-remove <名>`。

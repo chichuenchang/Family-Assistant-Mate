@@ -47,3 +47,23 @@ def test_env_path_override(tmp_path, monkeypatch):
     assert project_env.env_path() == tmp_path / "x.env"
     monkeypatch.delenv(project_env.ENV_FILE_VAR)
     assert project_env.env_path().parts[-2:] == (".codewhale", ".env")
+
+
+def test_import_selects_known_and_suffix(tmp_path):
+    f = tmp_path / ".env"
+    hkcu = {"DEEPSEEK_API_KEY": "sk", "LLM_EFFORT": "max", "ALICE_GMAIL_REFRESH_TOKEN": "rt",
+            "Path": "C:/x", "TEMP": "C:/t", "OneDrive": "C:/o", "EMPTY_API_KEY": "", "OTHER_AGENT_API_KEY": "x"}
+    names = project_env.import_windows(f, read=lambda: hkcu)
+    assert sorted(names) == ["ALICE_GMAIL_REFRESH_TOKEN", "DEEPSEEK_API_KEY", "LLM_EFFORT"]
+    assert project_env.parse(f.read_text(encoding="utf-8")) == {
+        "DEEPSEEK_API_KEY": "sk", "LLM_EFFORT": "max", "ALICE_GMAIL_REFRESH_TOKEN": "rt"}
+
+
+def test_import_keeps_existing_file_value(tmp_path):
+    f = tmp_path / ".env"
+    f.write_text("DEEPSEEK_API_KEY=mine\nZHIPU_API_KEY=\n", encoding="utf-8")
+    names = project_env.import_windows(
+        f, read=lambda: {"DEEPSEEK_API_KEY": "old", "ZHIPU_API_KEY": "z"})
+    assert names == ["ZHIPU_API_KEY"]
+    assert project_env.parse(f.read_text(encoding="utf-8")) == {
+        "DEEPSEEK_API_KEY": "mine", "ZHIPU_API_KEY": "z"}

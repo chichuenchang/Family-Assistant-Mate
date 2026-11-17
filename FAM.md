@@ -53,7 +53,7 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 
 ## 测试
 
-`conda run -n familyassis310 python -m pytest -q`，该 env 装全 `requirements.txt`，应 0 skip（运行时依赖仍可选）。别的 env（如 `bmore`）缺 `pypdfium2`：PDF_Editor 测试 skip，`tests/test_ocr.py` PDF 断言败（"页数未知"）。见 skip 或败先查解释器。
+`conda run -n familyassis310 python -m pytest -q`，该 env 装全 `requirements.txt`，应 0 skip。别的 env（如 `bmore`）缺 `pypdfium2`：PDF_Editor 测试 skip，`tests/test_ocr.py` PDF 断言败（"页数未知"）。见 skip 或败先查解释器。
 
 ## Google 凭据丢失
 

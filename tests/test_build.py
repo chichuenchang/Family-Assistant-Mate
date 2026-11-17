@@ -178,6 +178,17 @@ def test_main_builds_and_warns_dirty(repo, builds, monkeypatch, capsys):
     assert str(build.latest(builds)) in capsys.readouterr().out
 
 
+def test_main_reports_git_failure(tmp_path, builds, monkeypatch, capsys):
+    root = tmp_path / "nogit"
+    _write(root, ".codewhale/skills/X/cli.py", "print('hi')\n")
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))   # no parent repo
+    monkeypatch.setattr(build, "ROOT", root)
+    monkeypatch.setenv("FA_BUILDS_DIR", str(builds))
+    assert build.main([]) == 1
+    assert "BUILD FAILED: git" in capsys.readouterr().out
+    assert build.latest(builds) is None
+
+
 # ── Task 3: safe removal / prune ───────────────────────────
 
 def test_remove_keeps_live_data(repo, builds):

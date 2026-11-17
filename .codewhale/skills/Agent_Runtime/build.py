@@ -184,13 +184,14 @@ def main(argv: list[str] | None = None) -> int:
     if errors:
         print("BUILD FAILED, no snapshot:", *errors, sep="\n")
         return 1
-    state = git_state(ROOT)
-    if state["dirty"]:
-        print(f"WARNING dirty: {len(state['dirty_files'])} uncommitted — commit when ready",
-              *(f"  {f}" for f in state["dirty_files"]), sep="\n")
     try:
+        state = git_state(ROOT)
+        if state["dirty"]:
+            print(f"WARNING dirty: {len(state['dirty_files'])} uncommitted — commit when ready",
+                  *(f"  {f}" for f in state["dirty_files"]), sep="\n")
         snap = make_snapshot(ROOT, builds, datetime.now().strftime(STAMP_FMT), state)
-    except BuildError as e:
+    except (RuntimeError, OSError) as e:      # BuildError, git failure, copy / disk error
+        print(f"BUILD FAILED: {e}")
         print(f"BUILD FAILED: {e}")
         return 1
     print(f"built {snap.name} ({state['commit']}{' dirty' if state['dirty'] else ''}) -> {snap}")

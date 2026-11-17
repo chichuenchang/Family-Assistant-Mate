@@ -104,6 +104,14 @@ python .codewhale/skills/Remote_Backup/cli.py backup-reorg --member "Alex Lee"
 `backup_sync._REGISTRY` 即可，引擎零改动。**提交 provider 前自查**：代码里不得出现任何字面
 token/key，凭据只能 `os.environ` 读取。
 
+## 凭据丢失（备份静默停）
+
+2026-07 `GDRIVE_*` 用户环境变量无故消失，备份静默停 9 周，`dirty_since` 卡住。
+作者机器 `GDRIVE_CLIENT_ID/SECRET` = `GCAL_CLIENT_ID/SECRET`（同一 OAuth 客户端；refresh token 按 scope 各异）。
+恢复：`GCAL_*` 的 ID/SECRET 复制到 `GDRIVE_*` → `backup_provider.py --auth` → `backup-now` → `backup-verify`。
+勿新建客户端：Console 不再显示已有 secret；新客户端看不到旧上传（`drive.file` 按应用隔离）。
+myaccount.google.com/permissions 撤销本应用 = Drive、Calendar token 同死。
+
 ## 新设备恢复（bootstrap）
 
 新设备上无 `members.json`（注册表存在 Alex 的备份里），存在鸡-蛋问题：

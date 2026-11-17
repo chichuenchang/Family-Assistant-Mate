@@ -51,6 +51,10 @@ python .codewhale/skills/Document_Keeper/cli.py doc-due
 python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 ```
 
+## 测试
+
+`conda run -n familyassis310 python -m pytest -q`。别的 env（如 `bmore`）缺 `pypdfium2`，`tests/test_ocr.py` 8 例 PDF 断言败（"页数未知"）：先查解释器。`test_ocr.py` 不加 `importorskip("pypdfium2")`——声明依赖，skip 掩盖坏 env。
+
 ## 成员注册（仅本机）
 
 - `member-add <名> --telegram <chat_id> --wechat <wxid>`（可多次传同一 flag 绑多个 id）、`member-list`、`member-remove <名>`。

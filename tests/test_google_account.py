@@ -92,6 +92,14 @@ def test_json_error_carries_status_body_and_label(http):
     assert e.value.status == 403 and e.value.body == b"insufficient scope"
 
 
+def test_json_error_omits_query_string(http):
+    _, replies = http
+    replies += [_token_reply(), (500, b"{}")]
+    with pytest.raises(GoogleApiError) as e:
+        GoogleAccount(PREFIX).json("GET", "https://x/messages?q=from%3Adoctor")
+    assert "/messages" in str(e.value) and "doctor" not in str(e.value)
+
+
 def test_request_returns_raw_status_without_raising(http):
     calls, replies = http
     replies += [_token_reply(), (404, b"gone")]

@@ -91,7 +91,8 @@ class GoogleAccount:
         return _http(method, url, data, headers, self.timeout)
 
     def json(self, method: str, url: str, payload: dict | None = None) -> dict:
-        """带认证的 JSON 调用。≥300 → GoogleApiError；空响应体 → {}。"""
+        """带认证的 JSON 调用。≥300 → GoogleApiError；空响应体 → {}。
+        错误文本只带 URL 路径：查询串含邮件搜索词等用户内容，不进日志。"""
         data, headers = None, {}
         if payload is not None:
             data = json.dumps(payload, ensure_ascii=False).encode()
@@ -99,7 +100,8 @@ class GoogleAccount:
         status, body = self.request(method, url, data, headers)
         if status >= 300:
             raise GoogleApiError(
-                status, f"{self.label} API {method} {url} → {status}: {body[:200]!r}", body)
+                status, f"{self.label} API {method} {urllib.parse.urlsplit(url).path} → {status}: "
+                        f"{body[:200]!r}", body)
         return json.loads(body) if body else {}
 
 

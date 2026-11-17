@@ -37,16 +37,19 @@ def test_untrusted_tools_cover_non_local_sources():
         assert tool in reg.untrusted_tools, tool
 
 
-def test_apply_fence_only_touches_untrusted_tools():
-    assert agent_core._apply_fence("web_read", "x").startswith(OPEN)
-    assert agent_core._apply_fence("list_transactions", "x") == "x"
+def test_call_fences_only_untrusted_tools(monkeypatch):
+    reg = agent_core.REGISTRY
+    monkeypatch.setitem(reg.tool_map, "web_read", lambda a: "x")
+    monkeypatch.setitem(reg.tool_map, "list_transactions", lambda a: "x")
+    assert reg.call("web_read", {}, agent_core.Caller()).for_llm.startswith(OPEN)
+    assert reg.call("list_transactions", {}, agent_core.Caller()).for_llm == "x"
 
 
 def _run_tool_turn(monkeypatch, tool: str, result: str):
     """假 LLM 先调一次 tool 再收尾；返回 (第二次调用看到的 msgs, 存档历史)。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
-    monkeypatch.setitem(agent_core._TOOL_MAP, tool, lambda args: result)
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, tool, lambda args: result)
     replies = iter([
         {"content": "", "tool_calls": [{"id": "c1", "function": {
             "name": tool, "arguments": json.dumps({"url": "https://x"})}}]},
@@ -66,7 +69,7 @@ def test_untrusted_tool_result_is_fenced_in_context(monkeypatch):
 
 
 def test_history_copy_keeps_close_marker_after_clip(monkeypatch):
-    long = "长" * (agent_core._HIST_TOOL_CAP + 500)
+    long = "长" * (agent_core._budget.HIST_TOOL_CAP + 500)
     _, hist = _run_tool_turn(monkeypatch, "web_read", long)
     stored = next(m for m in hist if m.get("role") == "tool")["content"]
     assert stored.startswith(OPEN) and stored.endswith(CLOSE)

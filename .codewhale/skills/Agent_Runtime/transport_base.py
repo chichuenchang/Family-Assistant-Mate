@@ -22,8 +22,7 @@ from pathlib import Path
 import backup_hook
 import paths as _paths
 import tool_runtime as rt
-from agent_core import (Agent, REGISTRY, is_clear_command, is_command, member_inbox_dir,
-                        split_reply)
+from agent_core import Agent, REGISTRY, is_clear_command, is_command, split_reply
 from members import resolve
 from skill_registry import run_ticks
 
@@ -98,7 +97,7 @@ class Transport:
     def inbox_path(self, member: str, ext: str) -> Path:
         """来件暂存路径 data/<成员>/inbox/YYYY-MM/<stamp_name>。"""
         now = datetime.now()
-        return member_inbox_dir(member, now) / stamp_name(self.channel, ext, now)
+        return _paths.member_inbox_dir(member, now) / stamp_name(self.channel, ext, now)
 
     @staticmethod
     def mark_dirty() -> None:

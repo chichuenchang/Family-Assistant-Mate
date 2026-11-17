@@ -6,10 +6,10 @@ import agent_core
 
 
 def test_estimate_tokens_cjk_and_ascii():
-    assert agent_core._estimate_tokens("") == 0
-    assert agent_core._estimate_tokens("你好啊") == 3          # CJK ≈ 1 token/字
-    assert agent_core._estimate_tokens("abcdefgh") == 2        # ASCII ≈ 4 字符/token
-    assert agent_core._estimate_tokens("你好ab") == 3          # 2 CJK + 2 ASCII(向上取整)
+    assert agent_core._budget.estimate_tokens("") == 0
+    assert agent_core._budget.estimate_tokens("你好啊") == 3          # CJK ≈ 1 token/字
+    assert agent_core._budget.estimate_tokens("abcdefgh") == 2        # ASCII ≈ 4 字符/token
+    assert agent_core._budget.estimate_tokens("你好ab") == 3          # 2 CJK + 2 ASCII(向上取整)
 
 
 def _turn(q, a):
@@ -22,7 +22,7 @@ def test_save_history_trims_oldest_turns_over_token_budget():
     for i in range(5):
         agent._save_history("u", _turn(f"问题{i}" + "字" * 20, f"回答{i}" + "字" * 20))
     h = agent.history["u"]
-    total = sum(agent_core._msg_tokens(m) for m in h)
+    total = sum(agent_core._budget.msg_tokens(m) for m in h)
     assert total <= 50
     # 整轮丢弃最旧、保留最新：首条必是 user、末条是最后一轮的 assistant
     assert h[0]["role"] == "user" and h[-1]["content"].startswith("回答4")
@@ -184,7 +184,7 @@ def test_reasoning_content_logged(monkeypatch, caplog):
     assistant 消息进历史时被剥掉 reasoning_content（agent_core 手工重组，不靠运气）。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
-    monkeypatch.setitem(agent_core._TOOL_MAP, "fake_scan", lambda a: "ok")
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "fake_scan", lambda a: "ok")
     replies = iter([
         {"content": "", "reasoning_content": "先想了一下",
          "tool_calls": [{"id": "t1", "function": {
@@ -216,7 +216,7 @@ def test_tool_results_persist_across_turns(monkeypatch):
     否则模型只见自己的文字回复（不含 id），会拿 PDF 文件名瞎编会话 id。"""
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
-    monkeypatch.setitem(agent_core._TOOL_MAP, "fake_scan",
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "fake_scan",
                         lambda a: "会话: 20260713_222813_2b73\n类型: acroform")
     replies = iter([
         {"content": "", "tool_calls": [{"id": "t1", "function": {
@@ -249,7 +249,7 @@ def test_huge_tool_result_truncated_in_history(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
     big = "会话: 20260713_222813_2b73\n" + "字" * 5000
-    monkeypatch.setitem(agent_core._TOOL_MAP, "fake_big", lambda a: big)
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "fake_big", lambda a: big)
     replies = iter([
         {"content": "", "tool_calls": [{"id": "t1", "function": {
             "name": "fake_big", "arguments": "{}"}}]},
@@ -259,7 +259,7 @@ def test_huge_tool_result_truncated_in_history(monkeypatch):
     agent.handle("扫描", user="u", member="Jim")
     tool_msgs = [m for m in agent.history["u"] if m["role"] == "tool"]
     assert len(tool_msgs) == 1
-    assert len(tool_msgs[0]["content"]) <= agent_core._HIST_TOOL_CAP + 20
+    assert len(tool_msgs[0]["content"]) <= agent_core._budget.HIST_TOOL_CAP + 20
     assert tool_msgs[0]["content"].startswith("会话: 20260713_222813_2b73")  # 首行保留
     assert "截断" in tool_msgs[0]["content"]
 
@@ -269,7 +269,7 @@ def _tool_loop_agent(monkeypatch, final):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     agent = agent_core.Agent(idle_clear_hours=0)
     ran = []
-    monkeypatch.setitem(agent_core._TOOL_MAP, "fake_ocr", lambda a: ran.append(1) or "ok")
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "fake_ocr", lambda a: ran.append(1) or "ok")
     calls = []
 
     def fake_llm(msgs, user=""):
@@ -306,7 +306,7 @@ def test_tool_round_cap_summary_tool_calls_not_run(monkeypatch):
 def test_model_sees_snake_case_params_and_cli_gets_kebab_flags(monkeypatch):
     # 模型只见一种命名（snake_case）；派发前换回 manifest 的 kebab 名 → CLI 标志不变
     import tool_runtime as rt
-    props = {k for t in agent_core.TOOL_SCHEMAS
+    props = {k for t in agent_core.REGISTRY.schemas
              for k in t["function"]["parameters"]["properties"]}
     assert not [k for k in props if "-" in k]
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")

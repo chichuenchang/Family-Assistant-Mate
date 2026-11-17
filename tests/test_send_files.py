@@ -81,11 +81,11 @@ def test_resolve_sendable_gate(tmp_path, monkeypatch):
     bob = tmp_path / "bob" / "notes"; bob.mkdir(parents=True)
     (bob / "secret.png").write_bytes(b"x")
 
-    assert ac._resolve_sendable("Family/documents/lease.pdf", "Alex") == "Family/documents/lease.pdf"
-    assert ac._resolve_sendable("alex/notes/card.png", "Alex") == "alex/notes/card.png"
-    assert ac._resolve_sendable("bob/notes/secret.png", "Alex") is None
-    assert ac._resolve_sendable("../outside.txt", "Alex") is None
-    assert ac._resolve_sendable("Family/documents/missing.pdf", "Alex") is None
+    assert ac.rt.resolve_sendable("Family/documents/lease.pdf", "Alex") == "Family/documents/lease.pdf"
+    assert ac.rt.resolve_sendable("alex/notes/card.png", "Alex") == "alex/notes/card.png"
+    assert ac.rt.resolve_sendable("bob/notes/secret.png", "Alex") is None
+    assert ac.rt.resolve_sendable("../outside.txt", "Alex") is None
+    assert ac.rt.resolve_sendable("Family/documents/missing.pdf", "Alex") is None
 
 
 # ── Task 4: Telegram sendDocument multipart ─────────────────

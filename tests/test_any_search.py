@@ -240,13 +240,13 @@ class TestAgentRegistration:
     def test_anysearch_tools_registered(self):
         import agent_core
         names = {"anysearch_search", "anysearch_extract", "anysearch_subdomains"}
-        schema_names = {t["function"]["name"] for t in agent_core.TOOL_SCHEMAS}
+        schema_names = {t["function"]["name"] for t in agent_core.REGISTRY.schemas}
         assert names <= schema_names
-        assert names <= set(agent_core._TOOL_MAP)
+        assert names <= set(agent_core.REGISTRY.tool_map)
 
     def test_anysearch_search_is_vertical_only(self):
         import agent_core
-        fn = next(t["function"] for t in agent_core.TOOL_SCHEMAS
+        fn = next(t["function"] for t in agent_core.REGISTRY.schemas
                   if t["function"]["name"] == "anysearch_search")
         assert "domain" in fn["parameters"]["required"]
         assert "general" not in fn["parameters"]["properties"]["domain"]["enum"]
@@ -254,9 +254,9 @@ class TestAgentRegistration:
     def test_anysearch_commands_allowed_and_routed(self):
         import agent_core
         cmds = {"any-search", "any-extract", "any-subdomains"}
-        assert cmds <= agent_core.ALLOWED_COMMANDS
+        assert cmds <= agent_core.rt.ALLOWED
         for c in cmds:
-            assert agent_core._cli_path(c).parent.name == "Any_Search"
+            assert agent_core.rt.cli_path(c).parent.name == "Any_Search"
 
 
 # ── fetch_images：搜图 → 下载 → 返回 data 相对路径 ─────────────
@@ -463,17 +463,17 @@ class TestDownloadImage:
 class TestFetchImagesWiring:
     def test_registered_as_member_locked_image_tool(self):
         import agent_core
-        schema_names = {t["function"]["name"] for t in agent_core.TOOL_SCHEMAS}
+        schema_names = {t["function"]["name"] for t in agent_core.REGISTRY.schemas}
         assert "fetch_images" in schema_names
-        assert "fetch_images" in agent_core._TOOL_MAP
-        assert "fetch_images" in agent_core._IMAGE_TOOLS
-        assert agent_core._apply_member("fetch_images", {"member": "X"}, "Jim")["member"] == "Jim"
+        assert "fetch_images" in agent_core.REGISTRY.tool_map
+        assert "fetch_images" in agent_core.REGISTRY.image_tools
+        assert agent_core.REGISTRY.arguments("fetch_images", {"member": "X"}, agent_core.Caller(member="Jim"))["member"] == "Jim"
 
     def test_command_routed_with_long_timeout(self):
         import agent_core
-        assert "any-images" in agent_core.ALLOWED_COMMANDS
-        assert agent_core._cli_path("any-images").parent.name == "Any_Search"
-        assert agent_core._CLI_TIMEOUTS["any-images"] >= 60
+        assert "any-images" in agent_core.rt.ALLOWED
+        assert agent_core.rt.cli_path("any-images").parent.name == "Any_Search"
+        assert agent_core.rt.CLI_TIMEOUTS["any-images"] >= 60
 
     def test_system_prompt_routes_picture_requests(self):
         import agent_core
@@ -483,7 +483,7 @@ class TestFetchImagesWiring:
         import agent_core
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         agent = agent_core.Agent(idle_clear_hours=0)
-        monkeypatch.setitem(agent_core._TOOL_MAP, "visualize_data",
+        monkeypatch.setitem(agent_core.REGISTRY.tool_map, "visualize_data",
                             lambda args: "Jim/web_images/a.jpg\nJim/web_images/b.png\n")
         replies = iter([
             {"content": "", "tool_calls": [{"id": "c1", "function": {

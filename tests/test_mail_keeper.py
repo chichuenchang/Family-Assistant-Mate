@@ -246,27 +246,27 @@ class TestDraftGate:
 
 class TestAgentWiring:
     def test_tools_registered_and_member_locked(self):
-        names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         for t in ("check_mail", "read_mail", "draft_reply", "compose_mail", "send_draft"):
-            assert t in names and t in ac._TOOL_MAP
-            assert t in ac._MEMBER_LOCKED
+            assert t in names and t in ac.REGISTRY.tool_map
+            assert t in ac.REGISTRY.member_locked
         assert {"check_mail", "read_mail", "draft_reply",
-                "compose_mail"} <= ac._UNTRUSTED_TOOLS
+                "compose_mail"} <= ac.REGISTRY.untrusted_tools
 
     def test_member_cannot_be_overridden_by_llm(self):
-        out = ac._apply_member("check_mail", {"member": "Other"}, "MemberA")
+        out = ac.REGISTRY.arguments("check_mail", {"member": "Other"}, ac.Caller(member="MemberA"))
         assert out["member"] == "MemberA"
 
     @pytest.mark.parametrize("tool", ["draft_reply", "compose_mail", "send_draft"])
     def test_draft_tools_get_turn_context_injected(self, tool):
-        out = ac._apply_context(tool, {}, "wechat", "u1", "MemberA",
-                                turn_id=7, text="确认发送")
+        out = ac.REGISTRY.arguments(tool, {}, ac.Caller(
+            channel="wechat", user="u1", member="MemberA", turn_id=7, said="确认发送"))
         assert out["__turn_id"] == 7 and out["__user"] == "u1"
         assert out["__text"] == "确认发送"
 
     def test_other_tools_get_no_turn_context(self):
-        out = ac._apply_context("check_mail", {}, "wechat", "u1", "MemberA",
-                                turn_id=7, text="x")
+        out = ac.REGISTRY.arguments("check_mail", {}, ac.Caller(
+            channel="wechat", user="u1", member="MemberA", turn_id=7, said="x"))
         assert "__turn_id" not in out and "__text" not in out
 
     def test_each_user_message_is_a_new_turn(self, monkeypatch):
@@ -285,8 +285,8 @@ class TestGateSeesOnlyTheUsersOwnWords:
     def agent(self, monkeypatch):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
         self.got = {}
-        monkeypatch.setitem(ac._TOOL_MAP, "fake_send", lambda a: self.got.update(a) or "ok")
-        monkeypatch.setattr(ac, "_CONTEXT_TOOLS", ac._CONTEXT_TOOLS | {"fake_send"})
+        monkeypatch.setitem(ac.REGISTRY.tool_map, "fake_send", lambda a: self.got.update(a) or "ok")
+        monkeypatch.setattr(ac.REGISTRY, "context_tools", ac.REGISTRY.context_tools | {"fake_send"})
         agent = ac.Agent(idle_clear_hours=0)
         replies = iter([{"content": "", "tool_calls": [{"id": "t1", "function": {
             "name": "fake_send", "arguments": "{}"}}]}, {"content": "done"}])
@@ -312,8 +312,8 @@ class TestGateSeesOnlyTheUsersOwnWords:
 class TestDraftPreviewAlwaysReachesTheUser:
     def _agent(self, monkeypatch, replies):
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-        monkeypatch.setitem(ac._TOOL_MAP, "fake_draft", lambda a: "PREVIEW\n\x01DOC:other/x.pdf")
-        monkeypatch.setattr(ac, "_SHOW_TOOLS", ac._SHOW_TOOLS | {"fake_draft"})
+        monkeypatch.setitem(ac.REGISTRY.tool_map, "fake_draft", lambda a: "PREVIEW\n\x01DOC:other/x.pdf")
+        monkeypatch.setattr(ac.REGISTRY, "show_tools", ac.REGISTRY.show_tools | {"fake_draft"})
         agent = ac.Agent(idle_clear_hours=0)
         it = iter(replies)
         monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(it))
@@ -323,7 +323,7 @@ class TestDraftPreviewAlwaysReachesTheUser:
         "name": "fake_draft", "arguments": "{}"}}]}
 
     def test_draft_reply_is_a_show_tool(self):
-        assert "draft_reply" in ac._SHOW_TOOLS
+        assert "draft_reply" in ac.REGISTRY.show_tools
 
     def test_preview_appended_even_if_llm_hides_it(self, monkeypatch):
         out = self._agent(monkeypatch, [self.CALL, {"content": "好的"}]).handle(
@@ -358,7 +358,7 @@ class TestToolsRefuseWithoutMailBlock:
         assert at.tool_check_mail({"member": "MemberA"}).startswith("[错误]")
 
 
-# agent_core._apply_context 注入的本轮身份：起草一轮，确认必须落在紧接着的下一轮
+# skill_registry.Registry.arguments 注入的本轮身份：起草一轮，确认必须落在紧接着的下一轮
 TURN = {"__turn_id": 3, "__user": "u1"}
 NEXT_TURN = {"__turn_id": 4, "__user": "u1", "__text": "确认发送"}
 
@@ -1157,10 +1157,10 @@ class TestMuteTools:
         mw.last_push_path().unlink(missing_ok=True)
 
     def test_tools_are_registered_member_locked(self):
-        names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         for t in ("mail_last_push", "mail_rule"):
-            assert t in names and t in ac._MEMBER_LOCKED
-        assert "mail_last_push" in ac._UNTRUSTED_TOOLS
+            assert t in names and t in ac.REGISTRY.member_locked
+        assert "mail_last_push" in ac.REGISTRY.untrusted_tools
 
     def test_last_push_lists_what_was_broadcast(self):
         mw.record("MemberA", [{"id": "m2", "from": "Shop <d@shop.example>",
@@ -1194,7 +1194,7 @@ class TestMuteTools:
         assert "没有" in at.tool_mail_rules({"member": "MemberA"})
 
     def test_mail_rule_dispatches_actions(self):
-        tool = ac._TOOL_MAP["mail_rule"]
+        tool = ac.REGISTRY.tool_map["mail_rule"]
         out = tool({"member": "MemberA", "action": "always", "domain": "school.example"})
         assert "school.example" in out and mr.load("MemberA")[0]["push"] == "always"
         assert "school.example" in tool({"member": "MemberA", "action": "list"})
@@ -1320,10 +1320,10 @@ class TestAttachments:
         assert out.startswith("[错误]") and "附件" in out
 
     def test_tool_registered_member_locked_and_untrusted(self):
-        names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         assert "download_attachment" in names
-        assert "download_attachment" in ac._TOOL_MAP
-        assert "download_attachment" in ac._MEMBER_LOCKED
+        assert "download_attachment" in ac.REGISTRY.tool_map
+        assert "download_attachment" in ac.REGISTRY.member_locked
 
 
 class _FilterStub:
@@ -1442,11 +1442,11 @@ class TestFilterTools:
         return at.tool_apply_mail_filter({"member": "MemberA", **turn, "__text": "确认"})
 
     def test_registered_gated_and_shown(self):
-        names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
         for t in ("draft_mail_filter", "apply_mail_filter", "mail_filters"):
-            assert t in names and t in ac._MEMBER_LOCKED
-        assert {"draft_mail_filter", "apply_mail_filter"} <= ac._CONTEXT_TOOLS
-        assert "draft_mail_filter" in ac._SHOW_TOOLS
+            assert t in names and t in ac.REGISTRY.member_locked
+        assert {"draft_mail_filter", "apply_mail_filter"} <= ac.REGISTRY.context_tools
+        assert "draft_mail_filter" in ac.REGISTRY.show_tools
 
     def test_draft_previews_without_touching_gmail_settings(self, fstub):
         out = self._draft()

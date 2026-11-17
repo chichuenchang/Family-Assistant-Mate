@@ -346,23 +346,23 @@ class TestAgentRegistration:
     def test_note_tools_registered(self):
         import agent_core
         names = {"save_note", "list_notes", "search_notes", "update_note", "delete_note", "pin_note"}
-        schema_names = {t["function"]["name"] for t in agent_core.TOOL_SCHEMAS}
+        schema_names = {t["function"]["name"] for t in agent_core.REGISTRY.schemas}
         assert names <= schema_names
-        assert names <= set(agent_core._TOOL_MAP)
+        assert names <= set(agent_core.REGISTRY.tool_map)
         assert names == agent_core.REGISTRY.modules["Note_Keeper"].NOTE_TOOLS
 
     def test_note_commands_allowed_and_routed(self):
         import agent_core
         cmds = {"note-add", "note-list", "note-search", "note-edit", "note-delete", "note-pin"}
-        assert cmds <= agent_core.ALLOWED_COMMANDS
+        assert cmds <= agent_core.rt.ALLOWED
         for c in cmds:
-            assert agent_core._cli_path(c).parent.name == "Note_Keeper"
+            assert agent_core.rt.cli_path(c).parent.name == "Note_Keeper"
 
     def test_apply_member_forces_member_on_note_tools(self):
         import agent_core
-        out = agent_core._apply_member("search_notes", {"member": "妈妈", "keyword": "x"}, "爸爸")
+        out = agent_core.REGISTRY.arguments("search_notes", {"member": "妈妈", "keyword": "x"}, agent_core.Caller(member="爸爸"))
         assert out["member"] == "爸爸"
-        out = agent_core._apply_member("delete_note", {"member": "妈妈", "id": 1}, "爸爸")
+        out = agent_core.REGISTRY.arguments("delete_note", {"member": "妈妈", "id": 1}, agent_core.Caller(member="爸爸"))
         assert out["member"] == "爸爸"
 
 

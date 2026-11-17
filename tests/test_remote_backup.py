@@ -601,21 +601,21 @@ import agent_core
 
 class TestAgentIntegration:
     def test_backup_commands_route(self):
-        assert agent_core._cli_path("backup-now").parts[-2] == "Remote_Backup"
-        assert agent_core._cli_path("backup-reorg").parts[-2] == "Remote_Backup"
-        assert agent_core._cli_path("doc-add").parts[-2] == "Document_Keeper"
-        assert agent_core._cli_path("add").parts[-2] == "Expense_Tracker"
+        assert agent_core.rt.cli_path("backup-now").parts[-2] == "Remote_Backup"
+        assert agent_core.rt.cli_path("backup-reorg").parts[-2] == "Remote_Backup"
+        assert agent_core.rt.cli_path("doc-add").parts[-2] == "Document_Keeper"
+        assert agent_core.rt.cli_path("add").parts[-2] == "Expense_Tracker"
 
     def test_whitelist(self):
         for cmd in ("backup-now", "backup-status", "backup-verify"):
-            assert cmd in agent_core.ALLOWED_COMMANDS
-        assert "backup-restore" not in agent_core.ALLOWED_COMMANDS
+            assert cmd in agent_core.rt.ALLOWED
+        assert "backup-restore" not in agent_core.rt.ALLOWED
 
     def test_tools_registered(self):
-        assert "backup" in agent_core._TOOL_MAP
-        schema_names = {t["function"]["name"] for t in agent_core.TOOL_SCHEMAS}
+        assert "backup" in agent_core.REGISTRY.tool_map
+        schema_names = {t["function"]["name"] for t in agent_core.REGISTRY.schemas}
         assert "backup" in schema_names
-        assert agent_core._TOOL_MAP["backup"]({"action": "restore"}).startswith("[错误]")
+        assert agent_core.REGISTRY.tool_map["backup"]({"action": "restore"}).startswith("[错误]")
 
 
 class TestScopeResolver:

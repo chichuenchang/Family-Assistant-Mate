@@ -186,9 +186,9 @@ def test_ocr_read_accepts_data_relative_path(monkeypatch, tmp_path):
 
 
 def test_ocr_read_registered_and_untrusted():
-    names = {t["function"]["name"] for t in ac.TOOL_SCHEMAS}
-    assert "ocr_read" in names and "ocr_read" in ac._TOOL_MAP
-    assert "ocr_read" in ac._UNTRUSTED_TOOLS
+    names = {t["function"]["name"] for t in ac.REGISTRY.schemas}
+    assert "ocr_read" in names and "ocr_read" in ac.REGISTRY.tool_map
+    assert "ocr_read" in ac.REGISTRY.untrusted_tools
 
 
 def test_ocr_extract_goes_through_llm_client(monkeypatch, tmp_path):
@@ -344,6 +344,6 @@ def test_ocr_read_flags_pdf_over_20_pages(monkeypatch):
 def test_ocr_read_with_pages_routes_to_page_reader(monkeypatch):
     seen = {}
     monkeypatch.setattr(_ocr_at, "tool_ocr_read_pages", lambda a: seen.setdefault("p", a) and "页段")
-    assert ac._TOOL_MAP["ocr_read"]({"path": "x.pdf", "first_page": 21}) == "页段"
-    assert "ocr_read_pages" not in ac._TOOL_MAP
-    assert "ocr_read" in ac._UNTRUSTED_TOOLS
+    assert ac.REGISTRY.tool_map["ocr_read"]({"path": "x.pdf", "first_page": 21}) == "页段"
+    assert "ocr_read_pages" not in ac.REGISTRY.tool_map
+    assert "ocr_read" in ac.REGISTRY.untrusted_tools

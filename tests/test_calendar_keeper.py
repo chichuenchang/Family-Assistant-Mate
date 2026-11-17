@@ -328,31 +328,31 @@ _COMMANDS = {"cal-add", "cal-list", "cal-update", "cal-done", "cal-delete", "cal
 
 def _desc(name):
     import agent_core
-    return next(t["function"] for t in agent_core.TOOL_SCHEMAS
+    return next(t["function"] for t in agent_core.REGISTRY.schemas
                 if t["function"]["name"] == name)
 
 
 class TestAgentWiring:
     def test_tools_registered(self):
         import agent_core
-        names = {t["function"]["name"] for t in agent_core.TOOL_SCHEMAS}
+        names = {t["function"]["name"] for t in agent_core.REGISTRY.schemas}
         for n in _TOOLS:
             assert n in names, n
-            assert n in agent_core._TOOL_MAP, n
+            assert n in agent_core.REGISTRY.tool_map, n
 
     def test_cal_commands_routed_and_allowed(self):
         import agent_core
-        path = agent_core._cli_path("cal-add")
+        path = agent_core.rt.cli_path("cal-add")
         assert path.parts[-2:] == ("Calendar_Keeper", "cli.py")
-        assert _COMMANDS <= agent_core.ALLOWED_COMMANDS
-        assert "cal-sync" not in agent_core.ALLOWED_COMMANDS
+        assert _COMMANDS <= agent_core.rt.ALLOWED
+        assert "cal-sync" not in agent_core.rt.ALLOWED
 
     def test_member_injected_on_schedule_writes(self):
         import agent_core
-        out = agent_core._apply_member("add_event",
-                                       {"member": "假冒", "title": "x"}, "MemberA")
+        out = agent_core.REGISTRY.arguments("add_event",
+                                       {"member": "假冒", "title": "x"}, agent_core.Caller(member="MemberA"))
         assert out["member"] == "MemberA"
-        out2 = agent_core._apply_member("add_task", {"title": "y"}, "MemberA")
+        out2 = agent_core.REGISTRY.arguments("add_task", {"title": "y"}, agent_core.Caller(member="MemberA"))
         assert out2["member"] == "MemberA"
 
     def test_member_forced_on_read_and_mutate_tools(self):
@@ -360,7 +360,7 @@ class TestAgentWiring:
         import agent_core
         for tool in ("complete_task", "remove_schedule_item", "list_schedule",
                      "update_schedule_item", "calendar_status"):
-            out = agent_core._apply_member(tool, {"member": "假冒", "id": "t:1"}, "MemberA")
+            out = agent_core.REGISTRY.arguments(tool, {"member": "假冒", "id": "t:1"}, agent_core.Caller(member="MemberA"))
             assert out.get("member") == "MemberA", tool
 
     def test_prompt_forces_tool_on_schedule_query(self):
@@ -399,6 +399,6 @@ class TestAgentWiring:
         import tool_runtime as rt
         seen = []
         monkeypatch.setattr(rt, "run_cli", lambda cmd, args=None: seen.append((cmd, args)) or "ok")
-        agent_core._TOOL_MAP["calendar_status"]({"member": "MemberA"})
+        agent_core.REGISTRY.tool_map["calendar_status"]({"member": "MemberA"})
         assert seen == [("cal-status", {"member": "MemberA"})]
         assert "sync" not in _desc("calendar_status")["parameters"]["properties"]

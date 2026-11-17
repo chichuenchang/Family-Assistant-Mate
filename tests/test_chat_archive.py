@@ -119,8 +119,9 @@ def test_missing_file_is_empty():
 
 def test_tool_reads_injected_user_only():
     chat_archive.append("wechat", "u", "旧话题", "旧回复")
-    tool = agent_core._TOOL_MAP["chat_history"]
-    targs = agent_core._apply_context("chat_history", {"query": "旧"}, "wechat", "u", "爸爸")
+    tool = agent_core.REGISTRY.tool_map["chat_history"]
+    targs = agent_core.REGISTRY.arguments("chat_history", {"query": "旧"}, agent_core.Caller(
+        channel="wechat", user="u", member="爸爸"))
     assert "旧话题" in tool(targs)
     assert "旧话题" not in tool({"__channel": "wechat", "__user": "other"})
     assert tool({}).startswith("[错误]")

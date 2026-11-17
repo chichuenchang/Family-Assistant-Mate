@@ -6,7 +6,7 @@ import agent_core
 
 def test_load_llm_overrides_missing_file(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
-    assert agent_core._load_llm_overrides() == {}
+    assert agent_core._llm.load_overrides() == {}
 
 
 def test_load_llm_overrides_validates_values(tmp_path, monkeypatch):
@@ -18,7 +18,7 @@ def test_load_llm_overrides_validates_values(tmp_path, monkeypatch):
         "u4": {"model": "deepseek-flash"},                # 登记模型单键也合法
         "u5": {"model": "GLM", "effort": 3},              # 别名不分大小写 → 规范名
     }), encoding="utf-8")
-    assert agent_core._load_llm_overrides() == {
+    assert agent_core._llm.load_overrides() == {
         "u1": {"effort": "high"}, "u4": {"model": "deepseek-flash"},
         "u5": {"model": "glm-5.3-flash"}}
 
@@ -26,7 +26,7 @@ def test_load_llm_overrides_validates_values(tmp_path, monkeypatch):
 def test_load_llm_overrides_corrupt_json(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     (tmp_path / ".llm_overrides.json").write_text("{broken", encoding="utf-8")
-    assert agent_core._load_llm_overrides() == {}
+    assert agent_core._llm.load_overrides() == {}
 
 
 def test_stale_override_pruned_on_disk_warns_once(tmp_path, monkeypatch, caplog):
@@ -35,13 +35,13 @@ def test_stale_override_pruned_on_disk_warns_once(tmp_path, monkeypatch, caplog)
         "u1": {"model": "claude-opus-5"}, "u2": {"effort": "max", "model": "gone"}}),
         encoding="utf-8")
     with caplog.at_level("WARNING"):
-        assert agent_core._load_llm_overrides() == {"u2": {"effort": "max"}}
+        assert agent_core._llm.load_overrides() == {"u2": {"effort": "max"}}
     assert "未登记值" in caplog.text
     on_disk = json.loads((tmp_path / ".state" / ".llm_overrides.json").read_text(encoding="utf-8"))
     assert on_disk == {"u2": {"effort": "max"}}
     caplog.clear()
     with caplog.at_level("WARNING"):
-        assert agent_core._load_llm_overrides() == {"u2": {"effort": "max"}}
+        assert agent_core._llm.load_overrides() == {"u2": {"effort": "max"}}
     assert caplog.text == ""
 
 
@@ -49,19 +49,19 @@ def test_corrupt_overrides_moved_aside_warns_once(tmp_path, monkeypatch, caplog)
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     (tmp_path / ".llm_overrides.json").write_text("{broken", encoding="utf-8")
     with caplog.at_level("WARNING"):
-        assert agent_core._load_llm_overrides() == {}
+        assert agent_core._llm.load_overrides() == {}
     assert (tmp_path / ".state" / ".llm_overrides.json.bad").read_text(encoding="utf-8") == "{broken"
     caplog.clear()
     with caplog.at_level("WARNING"):
-        assert agent_core._load_llm_overrides() == {}
+        assert agent_core._llm.load_overrides() == {}
     assert caplog.text == ""
 
 
 def test_save_llm_overrides_roundtrip_atomic(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     data = {"u1": {"effort": "max"}}
-    agent_core._save_llm_overrides(data)
-    assert agent_core._load_llm_overrides() == data
+    agent_core._llm.save_overrides(data)
+    assert agent_core._llm.load_overrides() == data
     assert [p.name for p in (tmp_path / ".state").iterdir()] == [".llm_overrides.json"]  # 无临时文件残留
 
 
@@ -137,7 +137,7 @@ def test_model_command_switch_alias_reset(tmp_path, monkeypatch):
     assert "glm-5.3-flash（你的个人覆盖）" in a.handle("/model", user="u1", member="Jim")
     a.handle("/model reset", user="u1", member="Jim")
     assert a._llm_settings("u1")[0] == "deepseek-flash"
-    assert agent_core._load_llm_overrides() == {}
+    assert agent_core._llm.load_overrides() == {}
 
 
 def test_model_command_refuses_unconfigured_key(tmp_path, monkeypatch):
@@ -208,7 +208,7 @@ def test_persist_merges_other_process_writes(tmp_path, monkeypatch):
     a2.handle("/effort high", user="u2", member="Jim")
     # a1 再切换 u1 时不得丢掉 u2 的覆盖
     a1.handle("/effort max", user="u1", member="Jim")
-    disk = agent_core._load_llm_overrides()
+    disk = agent_core._llm.load_overrides()
     assert disk["u2"] == {"effort": "high"}
     assert disk["u1"] == {"effort": "max"}
 
@@ -260,7 +260,7 @@ def test_persist_failure_warns_but_applies(tmp_path, monkeypatch):
     def boom(_):
         raise OSError("disk full")
 
-    monkeypatch.setattr(agent_core, "_save_llm_overrides", boom)
+    monkeypatch.setattr(agent_core._llm, "save_overrides", boom)
     r = a.handle("/effort low", user="u1", member="Jim")
     assert "重启后可能失效" in r
     assert a._llm_settings("u1")[1] == "low"  # 内存仍生效
@@ -273,7 +273,7 @@ def test_reset_persist_failure_warns(tmp_path, monkeypatch):
     def boom(_):
         raise OSError("disk full")
 
-    monkeypatch.setattr(agent_core, "_save_llm_overrides", boom)
+    monkeypatch.setattr(agent_core._llm, "save_overrides", boom)
     r = a.handle("/effort reset", user="u1", member="Jim")
     assert "重启后可能恢复" in r  # 旧覆盖还在盘上，重启会复活——必须告知
 
@@ -325,7 +325,7 @@ def test_truncated_tool_calls_not_executed(tmp_path, monkeypatch):
     a = _agent(tmp_path, monkeypatch)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "dummy")
     ran = []
-    monkeypatch.setitem(agent_core._TOOL_MAP, "boom", lambda args: ran.append(args) or "ok")
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "boom", lambda args: ran.append(args) or "ok")
     replies = iter([
         {"content": "", "_finish": "length",
          "tool_calls": [{"id": "1", "function": {"name": "boom", "arguments": '{"a": 1'}}]},

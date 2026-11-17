@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); 
 
 import logging
 
-from agent_core import receipt_month_dir, member_inbox_dir, setup_logging
+from agent_core import setup_logging
 from transport_base import Transport, stamp_name, with_quote as _with_quote
 import paths as _paths
 
@@ -86,7 +86,8 @@ def download_photo(file_id: str, member: str = "") -> Path | None:
         return None
     url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
     now = datetime.now()
-    staging = member_inbox_dir(member, now) if member else receipt_month_dir(now)
+    staging = (_paths.member_inbox_dir(member, now) if member
+               else _paths.family_receipts_dir(now))
     dest = staging / stamp_name("telegram", ".jpg", now)
     try:
         dest.write_bytes(urllib.request.urlopen(url, timeout=30).read())
@@ -108,7 +109,8 @@ def download_document(file_id: str, file_name: str, member: str = "") -> Path | 
         return None
     url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
     now = datetime.now()
-    staging = member_inbox_dir(member, now) if member else receipt_month_dir(now)
+    staging = (_paths.member_inbox_dir(member, now) if member
+               else _paths.family_receipts_dir(now))
     # 仅 PDF 走此函数（调用方已判定）；强制 .pdf，确保 ocr_image 走 PDF 分支
     dest = staging / stamp_name("telegram", ".pdf", now)
     try:

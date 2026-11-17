@@ -153,7 +153,7 @@ YouTube/X/Reddit/TikTok/Instagram/Bilibili/Zhihu 搜集"大家在怎么说"，�
   "已开始"给用户；出报告后由传输层轮询 `poll_and_deliver(send_fn, channel)` 把报告推回**发起人**
   （manifest `FAST_TICKS`；Telegram 挂在长轮询尾部 ~30s，微信走 `fast-tick` 守护线程 ~20s）。
 - **频道上下文注入**：`Agent(channel=...)`（各传输层构造时传 `"wechat"`/`"telegram"`）+ handle 里
-  `_apply_context` 把 `__channel`/`__user`/`member` 注入 `knowking` 工具参数（代码确定性，LLM 不得伪造投递目标）。本地测试无 channel → 工具返回"仅正式频道可用"。
+  `skill_registry.Registry.arguments` 把 `__channel`/`__user`/`member` 注入 `knowking` 工具参数（代码确定性，LLM 不得伪造投递目标）。本地测试无 channel → 工具返回"仅正式频道可用"。
 - **任务落盘** `data/.state/.knowking_jobs/<id>.json`（运行时瞬态，已列入 `backup_sync._HARD_EXCLUDE_DIRS`
   绝不进云备份；投递成功即删，删除失败标 delivered 下轮只清理绝不重发）。
   `running` 超 `stale_seconds`（默认 1800s，bot 重启/线程死）→ 记超时 error 再推送。同频道同用户
@@ -171,7 +171,7 @@ YouTube/X/Reddit/TikTok/Instagram/Bilibili/Zhihu 搜集"大家在怎么说"，�
 
 ## 安全
 
-- **命令白名单**：`config.json` 的 `wechat.allowed_commands` 是**记账族**命令白名单（`agent_core.ALLOWED_COMMANDS` 读取，config 缺失才回退内置集）；改它只影响记账族。备忘(note-*)/工作表(sheet-*)/图表(chart-render)/日程(cal-*)/文档(doc-* 除 doc-remove)/备份(backup-now/status/verify)/联网(web-*/any-*) 是 Agent 核心能力，`agent_core` 在装载时**恒定并入** `ALLOWED_COMMANDS`，不受本白名单增删影响。成员增删、doc-remove、backup-restore/reorg 等敏感命令既不在白名单也不并入 → Agent 调不到，仅限本机。
+- **命令白名单**：`config.json` 的 `wechat.allowed_commands` 是**记账族**命令白名单（`tool_runtime.ALLOWED` 读取，config 缺失才回退内置集）；改它只影响记账族。备忘(note-*)/工作表(sheet-*)/图表(chart-render)/日程(cal-*)/文档(doc-* 除 doc-remove)/备份(backup-now/status/verify)/联网(web-*/any-*) 是 Agent 核心能力，`agent_core` 在装载时**恒定并入** `ALLOWED_COMMANDS`，不受本白名单增删影响。成员增删、doc-remove、backup-restore/reorg 等敏感命令既不在白名单也不并入 → Agent 调不到，仅限本机。
 - **磁盘布局**：所有数据落盘位置经 `Agent_Runtime/paths.py`（单一事实来源）。`config.json` `data_root`(默认 data)+`family_dir_name`(默认 Family) 定根。家庭共享在 `data/Family/`（ledger.db 财务、documents.db 文档+成员资料、receipts/、documents/）；成员私有在 `data/<成员>/`（notes/、inbox/、pdf_edits/）。来图存发送者 `data/<成员>/inbox/`；备忘图搬 notes/，其余留 inbox。`agent_core.RECEIPTS_DIR`/`DOCUMENTS_DIR` 由 `paths` 计算，不硬编码。
 - **成员注册表**：`data/members.json`（git 不跟踪 — 姓名/频道 id 属隐私）只在本机用 `Expense_Tracker/cli.py member-add/list/remove` 管理（成员命令挂在记账 CLI 上，非本目录；不在命令白名单内，Agent 调不到）。未注册频道 id 一律静默丢弃；写入类账目的归属由 `agent_core` 注入解析出的成员名，LLM 给的 member 一律剥离（防冒名）。
 - **外部内容围栏**：非本地来源文本经 `tool_runtime.fence` 才进 LLM——manifest `UNTRUSTED_TOOLS` 的工具结果、来件 OCR、引用消息。软防线：降低注入命中率，不限制损害；备忘/工作表/成员资料（本地库）未套。

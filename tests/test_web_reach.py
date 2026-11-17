@@ -391,19 +391,19 @@ class TestAgentRegistration:
     def test_reach_tools_registered(self):
         import agent_core
         names = {"web_search", "web_read", "youtube_summarize"}
-        schema_names = {t["function"]["name"] for t in agent_core.TOOL_SCHEMAS}
+        schema_names = {t["function"]["name"] for t in agent_core.REGISTRY.schemas}
         assert names <= schema_names
-        assert names <= set(agent_core._TOOL_MAP)
+        assert names <= set(agent_core.REGISTRY.tool_map)
 
     def test_web_search_schema_requires_both_languages(self):
         import agent_core
-        fn = next(t["function"] for t in agent_core.TOOL_SCHEMAS
+        fn = next(t["function"] for t in agent_core.REGISTRY.schemas
                   if t["function"]["name"] == "web_search")
         assert fn["parameters"]["required"] == ["query_en", "query_zh"]
 
     def test_reach_commands_allowed_and_routed(self):
         import agent_core
         cmds = {"web-search", "web-read", "yt-summary"}
-        assert cmds <= agent_core.ALLOWED_COMMANDS
+        assert cmds <= agent_core.rt.ALLOWED
         for c in cmds:
-            assert agent_core._cli_path(c).parent.name == "Web_Reach"
+            assert agent_core.rt.cli_path(c).parent.name == "Web_Reach"

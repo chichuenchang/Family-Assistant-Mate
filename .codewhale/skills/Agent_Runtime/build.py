@@ -20,7 +20,9 @@ import jsonfile
 
 ROOT = Path(__file__).resolve().parents[3]
 CODE_DIR = ".codewhale"
-STAMP_RE = re.compile(r"^\d{8}-\d{6}$")
+STAMP_FMT = "%Y%m%d-%H%M%S"
+STAMP_RE = re.compile(r"^\d{8}-\d{6}$")   # = STAMP_FMT
+TMP, DEL = ".tmp", ".del"                 # build in progress / delete in progress
 
 
 class BuildError(RuntimeError):
@@ -113,9 +115,9 @@ def remove_snapshot(path: Path) -> bool:
     Junctions unlinked before rmtree: never walks into live data."""
     if not path.is_dir():
         return True
-    if not path.name.endswith(".del"):
+    if not path.name.endswith(DEL):
         try:
-            path = path.rename(path.with_name(path.name + ".del"))
+            path = path.rename(path.with_name(path.name + DEL))
         except OSError:
             return False
     try:
@@ -131,7 +133,7 @@ def prune(builds: Path, keep: int = 5) -> list[str]:
     if not builds.is_dir():
         return []
     stamps = sorted(p for p in builds.iterdir() if STAMP_RE.match(p.name))
-    junk = [p for p in builds.iterdir() if p.suffix in (".tmp", ".del")]
+    junk = [p for p in builds.iterdir() if p.suffix in (TMP, DEL)]
     return [p.name for p in stamps[:-keep] + junk if not remove_snapshot(p)]
 
 
@@ -140,7 +142,7 @@ def make_snapshot(root: Path, builds: Path, stamp: str) -> Path:
     final = builds / stamp
     if final.exists():
         raise BuildError(f"build {stamp} exists")
-    tmp = builds / f"{stamp}.tmp"
+    tmp = builds / f"{stamp}{TMP}"
     try:
         tmp.mkdir(parents=True)
         for rel in files_to_copy(root):
@@ -186,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"WARNING dirty: {len(state['dirty_files'])} uncommitted — commit when ready",
               *(f"  {f}" for f in state["dirty_files"]), sep="\n")
     try:
-        snap = make_snapshot(ROOT, builds, datetime.now().strftime("%Y%m%d-%H%M%S"))
+        snap = make_snapshot(ROOT, builds, datetime.now().strftime(STAMP_FMT))
     except BuildError as e:
         print(f"BUILD FAILED: {e}")
         return 1

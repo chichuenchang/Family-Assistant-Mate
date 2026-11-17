@@ -49,9 +49,12 @@ def _read(path: Path) -> str:
         return ""
 
 
-def load(path: Path | None = None) -> list[str]:
-    """文件值写入 os.environ（覆盖）。返回生效键名；文件缺失 → []。"""
+def load(path: Path | None = None, *, override: bool = True) -> list[str]:
+    """文件值写入 os.environ。返回生效键名；文件缺失 → []。
+    override=False：只补未设/空的键（skill 目录 .env 兜底用）。"""
     values = parse(_read(path or env_path()))
+    if not override:
+        values = {k: v for k, v in values.items() if not os.environ.get(k)}
     os.environ.update(values)
     return list(values)
 

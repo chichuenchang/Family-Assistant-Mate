@@ -30,6 +30,15 @@ def test_load_overrides_env(tmp_path, monkeypatch):
     assert os.environ["FAM_T_EMPTY"] == "kept"      # 空值不覆盖
 
 
+def test_load_no_override_fills_gaps_only(tmp_path, monkeypatch):
+    f = tmp_path / ".env"
+    f.write_text("FAM_T_SET=file\nFAM_T_BLANK=file\nFAM_T_NEW=file\n", encoding="utf-8")
+    monkeypatch.setenv("FAM_T_SET", "proc")
+    monkeypatch.setenv("FAM_T_BLANK", "")
+    assert sorted(project_env.load(f, override=False)) == ["FAM_T_BLANK", "FAM_T_NEW"]
+    assert os.environ["FAM_T_SET"] == "proc"
+
+
 def test_load_missing_file_noop(tmp_path):
     assert project_env.load(tmp_path / "nope.env") == []
 

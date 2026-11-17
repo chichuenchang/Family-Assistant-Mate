@@ -19,6 +19,6 @@ No build → reply that line, nothing launched; never fall back to repo code.
 
 cwd = snapshot: keeps prune off it (`build.py` `remove_snapshot`). Old bot still running → new one exits on single-instance lock; close old window first.
 
-Keys: snapshot's `.codewhale/.env` (`/build` copies it), loaded by `bootstrap`. No `HKCU:\Environment` read.
+Keys: snapshot's `.codewhale/.env` (`/build` copies it), loaded by `bootstrap`. No `HKCU:\Environment` read. Copy frozen at `/build`: key edit (incl. `--auth` token) needs `/build` again.
 
 Extra flags from `$ARGUMENTS` (e.g. `--relogin`, `--account <label>`, `--no-debug`) pass through to `wechat_ilink.py`. Reply one line: launched build `<id>`, or exact error.

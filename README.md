@@ -98,7 +98,7 @@
 # 1. 安装依赖（Python 3.10+；核心仅 stdlib，requirements.txt 全可选，逐条注释用途与缺失降级）
 pip install -r requirements.txt
 
-# 2. 密钥全放 .codewhale/.env（gitignore，值覆盖 Windows 环境变量）。必填 DEEPSEEK_API_KEY；
+# 2. 密钥全放 .codewhale/.env（gitignore）。必填 DEEPSEEK_API_KEY；
 #    ZHIPU_API_KEY 可选：glm-5.3-flash（/model glm），也是 DeepSeek 无响应时的自动顶替（config.json llm）
 copy .codewhale\.env.example .codewhale\.env      # 填值；旧 setx 值迁入：project_env.py --import-windows
 
@@ -267,7 +267,7 @@ FamilyAssistant/
 │           ├── agent_core.py     ← 频道无关 Agent 核心（全量上下文）
 │           ├── members.py        ← 成员注册表（存 git 忽略的 data/members.json）
 │           ├── paths.py          ← 磁盘布局单一事实源（member_store / family_*）
-│           ├── project_env.py    ← .codewhale/.env 读入 os.environ（覆盖）；--import-windows 迁 setx 旧值
+│           ├── project_env.py    ← .codewhale/.env 读写；--import-windows 迁 setx 旧值
 │           ├── migrate_storage.py ← 一次性存储迁移（单库 → 按成员分库）
 │           ├── knowking_jobs.py  ← 懂王（KnowKing）后台任务桥（提交/轮询/推送报告）
 │           ├── wechat_ilink.py   ← 微信传输层

@@ -55,8 +55,7 @@ class Caller:
 @dataclass
 class ToolOutcome:
     """一次工具调用的结果，已按 manifest 声明处理完。"""
-    ok: bool
-    for_llm: str                  # 本轮回给 LLM（UNTRUSTED_TOOLS 已套围栏）
+    for_llm: str                 # 本轮回给 LLM（UNTRUSTED_TOOLS 已套围栏）
     for_history: str              # 跨轮存档（先截断再套围栏：反过来闭合标记会被截掉）
     images: list[str] = field(default_factory=list)   # IMAGE_TOOLS 成功产出的 data 相对路径
     docs: list[str] = field(default_factory=list)     # DOC_TOOLS 成功产出的 data 相对路径
@@ -118,7 +117,7 @@ class Registry:
                   ", ".join(f"{k}={v}" for k, v in args.items()), result[:200])
         ok = bool(result) and not result.startswith(ERROR_PREFIX)
         fence = (lambda t: rt.fence(t, name)) if name in self.untrusted_tools else (lambda t: t)
-        out = ToolOutcome(ok, fence(result), fence(_budget.clip_tool_result(result)))
+        out = ToolOutcome(fence(result), fence(_budget.clip_tool_result(result)))
         if not ok:
             return out
         if name in self.image_tools:

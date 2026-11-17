@@ -110,6 +110,7 @@ token/key，凭据只能 `os.environ` 读取。
 `GDRIVE_*`、`GCAL_*` 可共用一个 OAuth 客户端（作者机器即是；refresh token 按 scope 各异）。
 共用时恢复：`GCAL_*` 的 ID/SECRET 复制到 `GDRIVE_*` → `backup_provider.py --auth` → `backup-now` → `backup-verify`。
 勿新建客户端：Console 只在创建时显示 secret；丢了在原客户端 Add secret 轮换，旧 secret 再停用。新 Cloud 项目看不到旧上传（`drive.file` 授权按项目号，同 Picker `setAppId`）。
+客户端闲置 6 个月 Google 自动删；30 天内 Console Deleted credentials 可恢复。
 myaccount.google.com/permissions 撤销本应用 = Drive、Calendar token 同死，`backup_provider.py`、`calendar_provider.py` 各跑 `--auth`。
 
 ## 新设备恢复（bootstrap）

@@ -163,7 +163,7 @@ class PlaywrightDriver:
             wid = bs.send("Browser.getWindowForTarget", {"targetId": tid})["windowId"]
             if bs.send("Browser.getWindowBounds", {"windowId": wid})["bounds"].get("windowState") == "minimized":
                 bs.send("Browser.setWindowBounds", {"windowId": wid, "bounds": {"windowState": "normal"}})
-                time.sleep(0.3)
+                self._wait(0.3)
             bs.detach()
         except PwError:
             pass

@@ -147,6 +147,13 @@ def member_pdf_creates_dir(member: str) -> Path:
     return d
 
 
+def member_browser_profile_dir(member: str) -> Path:
+    """成员专用 Chrome profile data/<成员>/browser_profile/（含各网站登录 cookie，不入备份）。"""
+    d = member_dir(member) / "browser_profile"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def member_mail_rules(member: str) -> Path:
     """成员的新邮件播报忽略规则 data/<成员>/mail/rules.json（用户教出来的偏好，入备份）。"""
     d = member_dir(member) / "mail"

@@ -18,6 +18,7 @@ if sys.platform == "win32":
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); import bootstrap  # noqa: E402,E702
 
+import browser_cfg  # noqa: E402
 import browser_chrome as bc  # noqa: E402
 import browser_jobs  # noqa: E402
 import members  # noqa: E402
@@ -38,7 +39,7 @@ def main() -> int:
         print("[错误] 浏览任务进行中，等它结束再登录")
         return 1
     try:
-        bc.ensure(args.member, bc.load_cfg())
+        bc.ensure(args.member, browser_cfg.load())
     except bc.ChromeError as e:
         print(f"[错误] {e}")
         return 1

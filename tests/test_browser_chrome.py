@@ -4,6 +4,7 @@ import time
 import pytest
 
 import backup_sync
+import browser_cfg
 import browser_chrome as bc
 import paths
 
@@ -28,7 +29,7 @@ def closer(cfg):
 
 
 def ens(member, popen=Popen):
-    return bc.ensure(member, bc.DEFAULTS, popen=popen, probe=lambda p: World.up,
+    return bc.ensure(member, browser_cfg.DEFAULTS, popen=popen, probe=lambda p: World.up,
                      sleep=lambda s: None, closer=closer)
 
 
@@ -47,12 +48,12 @@ def test_profile_dir_and_backup_exclusion():
 
 
 def test_load_cfg_overlays_defaults():
-    c = bc.load_cfg({"browser": {"port": 9444, "_comment": "x"}})
+    c = browser_cfg.load({"browser": {"port": 9444, "_comment": "x"}})
     assert c["port"] == 9444 and c["max_steps"] == 60 and "_comment" not in c
 
 
 def test_load_cfg_missing_block_is_defaults():
-    assert bc.load_cfg({}) == bc.DEFAULTS
+    assert browser_cfg.load({}) == browser_cfg.DEFAULTS
 
 
 def test_argv_visible_and_unflagged(tmp_path):
@@ -101,7 +102,7 @@ def test_ensure_never_up_raises():
 def test_close_graceful_then_kill_fallback():
     ens("Jim")
     killed = []
-    bc.close(bc.DEFAULTS, quit_fn=lambda ep: None, kill_fn=killed.append,
+    bc.close(browser_cfg.DEFAULTS, quit_fn=lambda ep: None, kill_fn=killed.append,
              probe=lambda p: True, sleep=lambda s: None)
     assert killed == [4242] and bc.owner() == ""
 
@@ -112,7 +113,7 @@ def test_close_graceful_no_kill():
 
     def quit_fn(ep):
         World.up = False
-    bc.close(bc.DEFAULTS, quit_fn=quit_fn, kill_fn=killed.append,
+    bc.close(browser_cfg.DEFAULTS, quit_fn=quit_fn, kill_fn=killed.append,
              probe=lambda p: World.up, sleep=lambda s: None)
     assert killed == [] and bc.owner() == ""
 
@@ -120,9 +121,9 @@ def test_close_graceful_no_kill():
 def test_idle_expired():
     ens("Jim")
     bc.touch()
-    assert not bc.idle_expired(bc.DEFAULTS)
-    assert bc.idle_expired(bc.DEFAULTS, now=time.time() + 31 * 60)
+    assert not bc.idle_expired(browser_cfg.DEFAULTS)
+    assert bc.idle_expired(browser_cfg.DEFAULTS, now=time.time() + 31 * 60)
 
 
 def test_idle_expired_false_without_chrome():
-    assert not bc.idle_expired(bc.DEFAULTS, now=time.time() + 99 * 60)
+    assert not bc.idle_expired(browser_cfg.DEFAULTS, now=time.time() + 99 * 60)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import browser_chrome as bc
+import browser_cfg
 import browser_driver as bd
 import browser_loop as bl
 import tool_runtime as rt
@@ -119,7 +119,7 @@ class FakeDriver:
         pass
 
 
-CFG = {**bc.DEFAULTS, "max_steps": 6}
+CFG = {**browser_cfg.DEFAULTS, "max_steps": 6}
 
 
 @pytest.fixture

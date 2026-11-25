@@ -8,7 +8,6 @@ Chrome 以普通进程启动（无自动化旗标），开本机调试端口，�
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import time
 import urllib.request
@@ -16,11 +15,6 @@ from pathlib import Path
 
 import jsonfile
 import paths as _paths
-import tool_runtime as rt
-
-DEFAULTS = {"exe": "", "port": 9333, "model": "", "effort": "medium", "max_steps": 60,
-            "timeout_s": 900, "idle_close_min": 30, "humanize": True, "speed": 1.0,
-            "max_sent_shots": 8}
 
 _CHROME_PATHS = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -34,11 +28,6 @@ _CLOSE_WAIT_S = 5
 
 class ChromeError(Exception):
     """起不来 / 找不到浏览器；消息直接给用户看。"""
-
-
-def load_cfg(config: dict | None = None) -> dict:
-    block = (rt.CONFIG if config is None else config).get("browser") or {}
-    return {**DEFAULTS, **{k: v for k, v in block.items() if k in DEFAULTS}}
 
 
 def find_chrome(configured: str = "") -> str | None:

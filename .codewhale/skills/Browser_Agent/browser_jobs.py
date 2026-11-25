@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 from typing import Callable, Optional
 
+import browser_cfg
 import browser_chrome as bc
 import paths as _paths
 import tool_runtime as rt
@@ -144,7 +145,7 @@ def _prune(folder: Path) -> None:
 def _default_runner(job: dict, emit, stopped) -> Result:
     import browser_loop
     import llm_client
-    cfg = bc.load_cfg()
+    cfg = browser_cfg.load()
     member = job["member"]
     shots = _paths.member_cache_dir(member, "browser")
     _prune(shots)
@@ -220,7 +221,7 @@ def deliver(push_text, push_photo, channel: str, *, jdir: Optional[Path] = None,
     close = close_chrome or (bc.close if jdir is None else (lambda cfg: None))
     d = jobs_dir(jdir)
     now = time.time() if now is None else now
-    cfg = bc.load_cfg()
+    cfg = browser_cfg.load()
     with _LOCK:
         _reap_orphans(d, channel)
     count = 0

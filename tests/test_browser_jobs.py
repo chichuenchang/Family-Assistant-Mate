@@ -198,6 +198,34 @@ def test_stale_running_becomes_error_and_frees_slot(jdir, pt, pp, pushes):
     assert bj.submit("b", "wechat", "u1", "Jim", background=False, jdir=jdir)[0]
 
 
+def orphan(jdir, channel="wechat"):
+    """模拟重启前留下的 running 任务（pid 属于已死的旧进程）。"""
+    jid = sub(jdir, channel=channel)
+    p = jdir / f"{jid}.json"
+    j = json.loads(p.read_text(encoding="utf-8"))
+    j["pid"] = -1
+    p.write_text(json.dumps(j, ensure_ascii=False), encoding="utf-8")
+    return jid
+
+
+def test_orphan_after_restart_frees_slot_now(jdir):
+    old = orphan(jdir)
+    assert bj.submit("b", "wechat", "u1", "Jim", background=False, jdir=jdir)[0]
+    assert job(jdir, old)["status"] == "error"
+
+
+def test_orphan_reported_on_next_tick(jdir, pt, pp, pushes):
+    orphan(jdir)
+    assert bj.deliver(pt, pp, "wechat", jdir=jdir) == 1
+    assert "重启" in pushes[-1][2]
+
+
+def test_other_channels_running_job_not_reaped(jdir):
+    other = orphan(jdir, channel="telegram")
+    assert bj.submit("b", "wechat", "u1", "Jim", background=False, jdir=jdir)[0] is None
+    assert job(jdir, other)["status"] == "running"
+
+
 def test_last_report_fenced_within_ttl(jdir, pt, pp):
     finished(jdir)
     bj.deliver(pt, pp, "wechat", jdir=jdir)

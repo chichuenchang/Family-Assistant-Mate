@@ -75,6 +75,16 @@ def _update(d: Path, jid: str, change: Callable[[dict], None]) -> Optional[dict]
 
 # ── 提交 / 停止 ─────────────────────────────────────────
 
+def _reap_orphans(d: Path, channel: str) -> None:
+    """调用方持 _LOCK。本频道 running 任务的 pid 不是本进程 = 重启前遗留，线程已随旧进程死：
+    不清就占着槽位到超时（~20 分钟）。只认本频道：别的频道可能是另一个活着的机器人进程。"""
+    me = os.getpid()
+    for j in _jobs(d):
+        if j.get("status") == "running" and j.get("channel") == channel and j.get("pid") != me:
+            j.update(status="error", error="机器人重启，浏览任务中断（可重试）")
+            _write(d, j)
+
+
 def busy(*, jdir: Optional[Path] = None) -> Optional[dict]:
     """占着浏览器槽位的任务（任何频道、任何人），没有 = None。"""
     return next((j for j in _jobs(jobs_dir(jdir)) if j.get("status") == "running"), None)
@@ -87,12 +97,13 @@ def submit(task: str, channel: str, user: str, member: str, *, background: bool 
         return None, "要我用浏览器做什么？请说清楚要查的内容。"
     d = jobs_dir(jdir)
     with _LOCK:
+        _reap_orphans(d, channel)
         running = busy(jdir=d)
         if running:
             return None, (f"浏览器正忙（{running.get('member') or '别人'} 的任务进行中），"
                           "等它结束或让发起人说“停止浏览”。")
         jid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
-        _write(d, {"id": jid, "channel": channel, "user": str(user), "member": member or "",
+        _write(d, {"id": jid, "pid": os.getpid(), "channel": channel, "user": str(user), "member": member or "",
                    "task": task, "status": "running", "report": "", "error": "",
                    "created_at": time.time(), "delivered_at": 0, "stop": False,
                    "outbox": [], "sent": 0, "images": [], "images_sent": False})
@@ -201,6 +212,8 @@ def deliver(push_text, push_photo, channel: str, *, jdir: Optional[Path] = None,
     d = jobs_dir(jdir)
     now = time.time() if now is None else now
     cfg = bc.load_cfg()
+    with _LOCK:
+        _reap_orphans(d, channel)
     count = 0
     for job in _jobs(d):
         if job.get("channel") != channel:

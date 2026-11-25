@@ -21,6 +21,7 @@ from playwright.sync_api import Error as PwError
 from playwright.sync_api import TimeoutError as PwTimeout
 from playwright.sync_api import sync_playwright
 
+import browser_guard
 import browser_humanize as hz
 from browser_driver import LABEL_CAP, MAX_ELEMENTS, TEXT_CAP, DriverError, DriverGone, Element, Snapshot
 
@@ -99,7 +100,8 @@ def _guard(fn):
 
 class PlaywrightDriver:
     def __init__(self, endpoint: str, *, humanize: bool = True, speed: float = 1.0,
-                 rng: random.Random | None = None):
+                 rng: random.Random | None = None, url_check=browser_guard.check_navigate):
+        self._url_check = url_check      # 图片地址由网页决定：下载前同导航一样查（防探本机/局域网）
         self._humanize = humanize
         self._speed = max(float(speed), 0.1)
         self._rng = rng or random.Random()
@@ -329,6 +331,9 @@ class PlaywrightDriver:
         if src.startswith("data:"):
             data = base64.b64decode(src.split(",", 1)[1])
         else:
+            reason = self._url_check(src)
+            if reason:
+                raise DriverError(f"不下载这张图：{reason}")
             resp = self._ctx.request.get(src, timeout=15_000)
             if not resp.ok:
                 raise DriverError(f"图片下载失败 HTTP {resp.status}")

@@ -60,7 +60,8 @@ def driver():
         if bc.is_up(port):
             break
         time.sleep(0.5)
-    d = bp.PlaywrightDriver(bc.endpoint(port), rng=random.Random(1), speed=5)
+    # 测试站在 127.0.0.1：放开图片地址检查；默认检查另测
+    d = bp.PlaywrightDriver(bc.endpoint(port), rng=random.Random(1), speed=5, url_check=lambda u: "")
     yield d
     d.close()
     bp.quit(bc.endpoint(port))
@@ -147,6 +148,15 @@ def test_screenshot_works_when_window_minimized(drv, tmp_path):
 
 def test_fetch_image(drv, tmp_path):
     assert drv.fetch_image(ref_of(drv, "image"), tmp_path).suffix == ".png"
+
+
+def test_fetch_image_refuses_local_network_src(drv, tmp_path, monkeypatch):
+    import browser_driver as bd
+    import browser_guard
+    monkeypatch.setattr(drv, "_url_check", browser_guard.check_navigate)
+    with pytest.raises(bd.DriverError, match="本机或局域网"):
+        drv.fetch_image(ref_of(drv, "image"), tmp_path)
+    assert not list(tmp_path.iterdir())
 
 
 def test_new_tab_followed(drv):

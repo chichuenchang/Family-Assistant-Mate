@@ -19,5 +19,7 @@ pypdf
 pypdfium2
 # Pillow — reportlab 贴图 + pypdfium2 渲染所需。
 Pillow
+# playwright — Browser_Agent 驱动可见 Chrome（用本机已装 Chrome，不需 playwright install）；未安装时 browse 返回 [错误]。
+playwright
 # reportlab — PDF_Editor 的覆盖层（写字/打勾/白底/贴图/画线）；未安装时仅表单字段填写与页级操作可用。
 reportlab

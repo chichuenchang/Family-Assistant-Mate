@@ -193,9 +193,17 @@ def test_photo_failure_skipped(jdir, pt):
 
 def test_stale_running_becomes_error_and_frees_slot(jdir, pt, pp, pushes):
     sub(jdir)
-    bj.deliver(pt, pp, "wechat", jdir=jdir, now=time.time() + 900 + 301)
-    assert "中断" in pushes[-1][2]
+    closed = []
+    bj.deliver(pt, pp, "wechat", jdir=jdir, now=time.time() + 900 + 301, close_chrome=closed.append)
+    assert "中断" in pushes[-1][2] and len(closed) == 1     # 关 Chrome 打断卡住的线程
     assert bj.submit("b", "wechat", "u1", "Jim", background=False, jdir=jdir)[0]
+
+
+def test_running_within_timeout_keeps_chrome(jdir, pt, pp):
+    sub(jdir)
+    closed = []
+    bj.deliver(pt, pp, "wechat", jdir=jdir, close_chrome=closed.append)
+    assert not closed
 
 
 def orphan(jdir, channel="wechat"):

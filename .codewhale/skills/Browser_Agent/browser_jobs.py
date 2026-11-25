@@ -207,8 +207,17 @@ def _text(job: dict) -> str:
     return f"⚠️ 浏览任务失败：{job.get('error') or '未知原因'}"
 
 
+def _close_chrome(close: Callable[[dict], None], cfg: dict, why: str) -> None:
+    try:
+        close(cfg)
+    except Exception:  # noqa: BLE001
+        _log.exception("%s关 Chrome 失败", why)
+
+
 def deliver(push_text, push_photo, channel: str, *, jdir: Optional[Path] = None,
-            now: float | None = None) -> int:
+            now: float | None = None, close_chrome: Optional[Callable[[dict], None]] = None) -> int:
+    """close_chrome 缺省：真实任务目录用 bc.close；测试目录（jdir）不碰真 Chrome。"""
+    close = close_chrome or (bc.close if jdir is None else (lambda cfg: None))
     d = jobs_dir(jdir)
     now = time.time() if now is None else now
     cfg = bc.load_cfg()
@@ -227,8 +236,17 @@ def deliver(push_text, push_photo, channel: str, *, jdir: Optional[Path] = None,
             if now - float(job.get("created_at") or 0) <= float(cfg["timeout_s"]) + _STALE_GRACE_S:
                 _push_outbox(d, job, push_photo)
                 continue
-            job = _update(d, jid, lambda j: j.update(status="error",
-                                                    error="浏览任务超时或中断（可重试）")) or job
+            stalled = []
+
+            def mark(j: dict) -> None:
+                if j.get("status") == "running":          # 线程恰好刚收尾就不算卡死
+                    j.update(status="error", error="浏览任务超时或中断（可重试）")
+                    stalled.append(j["id"])
+            job = _update(d, jid, mark) or job
+            if stalled:
+                # 线程卡死（evaluate 等调用不受 Playwright 超时管）：关 Chrome，卡住的调用随连接断开
+                # 报错退出，下一个任务不会和它共用浏览器。进程内唯一的强制终止手段（ADR 0001）。
+                _close_chrome(close, cfg, "超时任务")
         if job.get("status") not in ("done", "error"):
             continue
         _push_outbox(d, job, push_photo)
@@ -249,12 +267,8 @@ def deliver(push_text, push_photo, channel: str, *, jdir: Optional[Path] = None,
         _update(d, jid, lambda j: j.update(status="delivered", delivered_at=now,
                                           outcome=j.get("status")))
         count += 1
-    if jdir is None and busy(jdir=d) is None:
-        try:
-            if bc.idle_expired(cfg):
-                bc.close(cfg)
-        except Exception:  # noqa: BLE001
-            _log.exception("空闲关 Chrome 失败")
+    if jdir is None and busy(jdir=d) is None and bc.idle_expired(cfg):
+        _close_chrome(close, cfg, "空闲")
     return count
 
 

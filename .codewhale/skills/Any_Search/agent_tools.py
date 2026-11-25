@@ -43,7 +43,7 @@ SCHEMAS = [
        "返回 domain/sub_domain/query_format/params_schema 表", {
         "domains": s("单个或逗号分隔的多个领域，如 finance 或 finance,health"),
     }, ["domains"]),
-    fn("fetch_images", "从网上找图片并直接发给用户（用户要\"看X的图片/照片\"\"X长什么样\"）。"
+    fn("fetch_images", "从图库找图片并直接发给用户。仅当 browse 不可用（返回 [错误]）时用；平时找图用 browse。"
        "图片由系统自动发出，你只需一句话说明找的是什么；返回 [错误] 就如实说没找到", {
         "query": s("要找的图片内容；图库以英文为主，中文名词先译成英文（螳螂 → praying mantis）"),
         "count": int_("张数 1-5（默认 3）"),

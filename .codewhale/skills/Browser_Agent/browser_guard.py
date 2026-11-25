@@ -49,6 +49,17 @@ def check_click(label: str) -> str:
     return ""
 
 
+_ACTIVATE_KEYS = {"enter", "numpadenter", "space", " "}
+
+
+def check_press(key: str, role: str, label: str) -> str:
+    """回车/空格 = 点击焦点元素：Tab 到「立即购买」再按回车不能绕过 check_click。输入框里回车放行。"""
+    last = (key or "").rsplit("+", 1)[-1] or (key or "")
+    if last.lower() in _ACTIVATE_KEYS and role != "textbox":
+        return check_click(label)
+    return ""
+
+
 def _local_host(host: str) -> bool:
     if host == "localhost" or host.endswith(".localhost"):
         return True

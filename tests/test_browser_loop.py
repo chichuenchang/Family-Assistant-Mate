@@ -58,6 +58,10 @@ class FakeDriver:
         self.current_url = "https://start.example/"
         self.url_after_click = None
         self.fail_next = None
+        self.focus = None
+
+    def focused(self):
+        return self.focus
 
     def _act(self, *c):
         if self.fail_next:
@@ -203,6 +207,18 @@ def test_about_blank_is_not_a_landing_refusal(go, drv):
     drv.current_url = "about:blank"
     r = go(script([call("press", key="Escape")], [call("done", report="x")]), drv)
     assert ("back",) not in drv.calls and not r.blocked
+
+
+def test_enter_on_focused_order_button_refused(go, drv):
+    drv.focus = el("", "button", "Buy Now")
+    r = go(script([call("press", key="Enter")], [call("done", report="x")]), drv)
+    assert ("press", "Enter") not in drv.calls and r.blocked
+
+
+def test_enter_on_focused_search_button_allowed(go, drv):
+    drv.focus = el("", "button", "搜索")
+    r = go(script([call("press", key="Enter")], [call("done", report="x")]), drv)
+    assert ("press", "Enter") in drv.calls and not r.blocked
 
 
 def test_password_type_refused(go, drv):

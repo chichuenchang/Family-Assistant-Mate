@@ -119,6 +119,24 @@ def test_type_replaces_existing_text(drv):
     assert drv._page.evaluate("document.querySelector('input[name=q]').value") == "second"
 
 
+def test_focused_reports_button(drv):
+    drv._page.focus("button")
+    f = drv.focused()
+    assert f is not None and (f.role, f.label) == ("button", "Go")
+
+
+def test_focused_descends_into_iframe(drv):
+    drv._page.set_content('<iframe srcdoc="<button>Buy Now</button>"></iframe>')
+    drv._page.frames[1].wait_for_selector("button")
+    drv._page.frames[1].focus("button")
+    f = drv.focused()
+    assert f is not None and f.label == "Buy Now"
+
+
+def test_focused_none_on_body(drv):
+    assert drv.focused() is None
+
+
 def test_not_flagged_as_automation(drv):
     assert drv._page.evaluate("navigator.webdriver") is False
 

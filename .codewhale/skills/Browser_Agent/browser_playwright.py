@@ -29,9 +29,41 @@ NAV_TIMEOUT_MS = 30_000
 ACTION_TIMEOUT_MS = 10_000
 IMG_MAX_BYTES = 5 * 1024 * 1024
 
+# 元素 → {role, label, …}（Element 去掉 ref）。快照与焦点查询共用，闸门看到的标签同一口径。
+_DESCRIBE_JS = r"""
+const describe = (el, labelCap) => {
+  const clean = s => (s || '').replace(/\s+/g, ' ').trim();
+  const tag = el.tagName.toLowerCase(), type = (el.type || '').toLowerCase();
+  let role = el.getAttribute('role') || '';
+  if (!role) {
+    if (tag === 'a') role = 'link';
+    else if (tag === 'img') role = 'image';
+    else if (tag === 'select') role = 'combobox';
+    else if (tag === 'textarea' || el.isContentEditable) role = 'textbox';
+    else if (tag === 'input') role = ['checkbox', 'radio'].includes(type) ? type
+      : ['submit', 'button', 'reset', 'image'].includes(type) ? 'button' : 'textbox';
+    else role = 'button';
+  }
+  const label = tag === 'img' ? clean(el.alt || el.title)
+    : clean(el.innerText) || clean(el.getAttribute('aria-label')) || clean(el.placeholder)
+      || clean(el.title) || (type === 'password' ? '' : clean(el.value));
+  return {role, label: label.slice(0, labelCap), input_type: tag === 'input' ? type : '',
+          autocomplete: el.getAttribute('autocomplete') || '', name: el.name || el.id || '',
+          href: tag === 'a' ? el.href : ''};
+};
+"""
+
+# activeElement 描述；body = 无焦点。不看 document.hasFocus()：窗口在后台时它为假，键盘事件照样送达。
+_FOCUSED_JS = "(el, labelCap) => {" + _DESCRIBE_JS + r"""
+  if (el === document.body || el === document.documentElement) return null;
+  return describe(el, labelCap);
+}
+"""
+_FRAME_TAGS = ("IFRAME", "FRAME")
+_FOCUS_DEPTH = 5
+
 # 给每个可交互元素打 data-fam-ref；视口内的优先，总数封顶。args = [起始编号, 上限, 标签长度]
-_TAG_JS = r"""
-([start, cap, labelCap]) => {
+_TAG_JS = "([start, cap, labelCap]) => {" + _DESCRIBE_JS + r"""
   const SEL = 'a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=tab],' +
     '[role=menuitem],[role=option],[role=checkbox],[role=radio],[role=combobox],[role=textbox],' +
     '[onclick],[contenteditable=""],[contenteditable=true],img';
@@ -50,28 +82,11 @@ _TAG_JS = r"""
   }
   cand.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const picked = cand.slice(0, cap).sort((a, b) => a[1] - b[1]);
-  const clean = s => (s || '').replace(/\s+/g, ' ').trim();
   const out = []; let n = start;
   for (const [, , el] of picked) {
-    const tag = el.tagName.toLowerCase(), type = (el.type || '').toLowerCase();
-    let role = el.getAttribute('role') || '';
-    if (!role) {
-      if (tag === 'a') role = 'link';
-      else if (tag === 'img') role = 'image';
-      else if (tag === 'select') role = 'combobox';
-      else if (tag === 'textarea' || el.isContentEditable) role = 'textbox';
-      else if (tag === 'input') role = ['checkbox', 'radio'].includes(type) ? type
-        : ['submit', 'button', 'reset', 'image'].includes(type) ? 'button' : 'textbox';
-      else role = 'button';
-    }
-    const label = tag === 'img' ? clean(el.alt || el.title)
-      : clean(el.innerText) || clean(el.getAttribute('aria-label')) || clean(el.placeholder)
-        || clean(el.title) || (type === 'password' ? '' : clean(el.value));
     n += 1;
     el.setAttribute('data-fam-ref', 'e' + n);
-    out.push({ref: 'e' + n, role, label: label.slice(0, labelCap), input_type: tag === 'input' ? type : '',
-              autocomplete: el.getAttribute('autocomplete') || '', name: el.name || el.id || '',
-              href: tag === 'a' ? el.href : ''});
+    out.push({ref: 'e' + n, ...describe(el, labelCap)});
   }
   return {items: out, next: n};
 }
@@ -271,6 +286,23 @@ class PlaywrightDriver:
             self._page.keyboard.press("Enter")
             self._settle()
         self._pause()
+
+    @_guard
+    def focused(self) -> Element | None:
+        """顺 activeElement 链下钻 iframe 到真正的焦点元素。查不了（跨域 frame 报错）→ DriverError，按键不发。"""
+        frame = self._page.main_frame
+        for _ in range(_FOCUS_DEPTH):
+            el = frame.evaluate_handle("() => document.activeElement").as_element()
+            if el is None:
+                return None
+            if el.evaluate("e => e.tagName") in _FRAME_TAGS:
+                frame = el.content_frame()
+                if frame is None:
+                    return None
+                continue
+            d = el.evaluate(_FOCUSED_JS, LABEL_CAP)
+            return Element(ref="", **d) if d else None
+        raise DriverError("焦点嵌套过深，按键未发")
 
     @_guard
     def press(self, key: str) -> None:

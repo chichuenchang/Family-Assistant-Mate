@@ -142,6 +142,11 @@ class _Run:
         return self._after_action(f"在「{e.label}」输入", "已输入")
 
     def t_press(self, key: str = "") -> str:
+        f = self.driver.focused()
+        if f is not None:
+            reason = guard.check_press(str(key), f.role, f.label)
+            if reason:
+                return self._refuse(f"按键 {key}（焦点「{f.label}」）", reason)
         self.driver.press(str(key))
         return self._after_action(f"按键 {key}", "已按键")
 

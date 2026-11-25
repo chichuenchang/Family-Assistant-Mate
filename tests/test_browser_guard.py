@@ -36,6 +36,18 @@ def test_navigate_allowed(url):
     assert g.check_navigate(url) == ""
 
 
+@pytest.mark.parametrize("key", ["Enter", "NumpadEnter", "Space", " ", "Shift+Enter"])
+def test_activate_key_on_order_button_refused(key):
+    assert g.check_press(key, "button", "Buy Now")
+
+
+@pytest.mark.parametrize("key,role,label", [
+    ("Enter", "button", "搜索"), ("Tab", "button", "Buy Now"), ("Enter", "textbox", "Buy Now"),
+    ("ArrowDown", "link", "立即购买")])
+def test_press_allowed(key, role, label):
+    assert g.check_press(key, role, label) == ""
+
+
 def test_type_refusals():
     assert g.check_type("password", "", "")
     assert g.check_type("text", "cc-number", "")

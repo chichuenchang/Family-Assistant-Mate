@@ -91,6 +91,19 @@
     "_comment": "create_pdf（PDF_Editor pdf-create）用的无头浏览器。browser=Edge/Chrome 可执行文件路径；空 = 自动找 Edge/Chrome 默认安装位置与 PATH。",
     "browser": ""
   },
+  "browser": {
+    "_comment": "Browser_Agent（browse 工具）驱动的可见 Chrome。exe=chrome.exe 路径（空=自动找）；port=本机调试端口；model/effort=浏览助手用的模型与推理档（model 空=全局默认）；max_steps/timeout_s=单任务步数与秒数上限；idle_close_min=空闲几分钟关窗；humanize/speed=拟人输入开关与速度倍数；max_sent_shots=单任务最多推几张截图。见 Browser_Agent/SKILL.md。",
+    "exe": "",
+    "port": 9333,
+    "model": "",
+    "effort": "medium",
+    "max_steps": 60,
+    "timeout_s": 900,
+    "idle_close_min": 30,
+    "humanize": true,
+    "speed": 1.0,
+    "max_sent_shots": 8
+  },
   "backup": {
     "enabled": true,
     "debounce_seconds": 60

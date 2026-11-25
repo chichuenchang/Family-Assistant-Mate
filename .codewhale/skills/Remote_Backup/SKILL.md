@@ -79,18 +79,13 @@ python .codewhale/skills/Remote_Backup/cli.py backup-reorg --member "Alex Lee"
    （External，发布状态设 **In production**，否则 refresh token 7 天过期）→
    创建 OAuth 客户端（**Desktop app**）→ 拿到 Client ID / Client Secret。
 
-3. 设置凭据环境变量（前缀与成员 `cred_prefix` 一致）：
-   ```cmd
-   setx GDRIVE_CLIENT_ID "..."
-   setx GDRIVE_CLIENT_SECRET "..."
-   ```
-   （新终端生效）。若成员使用自定义前缀（如 `WLI_GDRIVE`），变量名相应调整。
+3. `.codewhale/.env` 填 `GDRIVE_CLIENT_ID` / `GDRIVE_CLIENT_SECRET`（前缀与成员 `cred_prefix` 一致，如 `WLI_GDRIVE_CLIENT_ID`）。
 
 4. 一次性授权：
    ```bash
    python .codewhale/skills/Remote_Backup/backup_provider.py --auth [--prefix PREFIX]
    ```
-   → 浏览器批准 → 按提示 `setx {PREFIX}_REFRESH_TOKEN "..."`。
+   → 浏览器批准 → `{PREFIX}_REFRESH_TOKEN` 自动写入 `.codewhale/.env`。
 
 5. `config.json` 设 `backup.enabled: true`，重启机器人。
 
@@ -106,8 +101,8 @@ token/key，凭据只能 `os.environ` 读取。
 
 ## 凭据丢失（备份静默停）
 
-2026-07 `GDRIVE_*` 用户环境变量无故消失，停 9 周，`dirty_since` 卡住。
-与 `GCAL_*` 共用客户端时（refresh token 按 scope 各异，勿复制）：ID/SECRET 复制到 `GDRIVE_*`，依次跑 `backup_provider.py --auth`、`backup-now`、`backup-verify`。
+2026-07 `GDRIVE_*` 用户环境变量无故消失，停 9 周，`dirty_since` 卡住；此后凭据改存 `.codewhale/.env`。
+与 `GCAL_*` 共用客户端时（refresh token 按 scope 各异，勿复制）：`.env` 里 ID/SECRET 复制到 `GDRIVE_*`，依次跑 `backup_provider.py --auth`、`backup-now`、`backup-verify`。
 勿新建客户端：Console 只在创建时显示 secret；丢了在原客户端 Add secret 轮换，旧 secret 再停用。新 Cloud 项目看不到旧上传（`drive.file` 授权按项目号）。
 客户端闲置 6 个月 Google 自动删；30 天内 Console Deleted credentials 可恢复。
 myaccount.google.com/permissions 撤销本应用：共用该客户端的 provider token 全死，各跑 `--auth`。

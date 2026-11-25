@@ -18,9 +18,9 @@
 ## 开启（Google）
 
 1. Cloud Console 启用 Calendar API + Tasks API，OAuth 客户端 Desktop app（可复用 Remote_Backup 的）。
-2. `setx GCAL_CLIENT_ID "..."`、`setx GCAL_CLIENT_SECRET "..."`。
-3. `python .codewhale/skills/Calendar_Keeper/calendar_provider.py --auth` → `setx GCAL_REFRESH_TOKEN "..."`。
-4. 可选非主日历：`setx GCAL_CALENDAR_ID "..."`（形如邮箱，隐私，不进 config）。
+2. `.codewhale/.env` 填 `GCAL_CLIENT_ID` / `GCAL_CLIENT_SECRET`。
+3. `python .codewhale/skills/Calendar_Keeper/calendar_provider.py --auth` → `GCAL_REFRESH_TOKEN` 自动写入 `.env`。
+4. 可选非主日历：`.env` 填 `GCAL_CALENDAR_ID`（形如邮箱，隐私，不进 config）。
 5. members.json 该成员：`"sync": {"schedule": {"provider":"google_calendar","enabled":true}, "tasks": {"provider":"google_tasks","enabled":true}}`。
 6. `cal-status --member "<名>"` 确认。
 

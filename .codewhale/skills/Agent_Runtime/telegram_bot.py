@@ -209,8 +209,8 @@ class TelegramTransport(Transport):
     def send_text(self, target, text: str) -> bool:
         return send_message(target, text)
 
-    def send_photo(self, target, path: str) -> None:
-        send_photo(target, path)
+    def send_photo(self, target, path: str) -> bool:
+        return send_photo(target, path)
 
     def send_document(self, target, path: str) -> None:
         send_document(target, path)
@@ -309,7 +309,7 @@ def run() -> None:
     if not TOKEN:
         print("[tg] 未设置 TELEGRAM_BOT_TOKEN。")
         print("  1. Telegram 搜 @BotFather → /newbot")
-        print("  2. setx TELEGRAM_BOT_TOKEN \"你的token\"")
+        print("  2. .codewhale/.env 填 TELEGRAM_BOT_TOKEN=你的token")
         return
 
     # 启动时验证 Token

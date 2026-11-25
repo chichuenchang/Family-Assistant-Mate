@@ -14,6 +14,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import project_env  # Agent_Runtime, on sys.path via bootstrap
+
 CAP = 6000              # max chars handed back to the LLM (DeepSeek max_tokens is tight)
 BLOCK_CAP = 2000        # per bilingual_search block; 4 blocks ≈ 8000
 _TRUNC = "…[截断]"
@@ -171,21 +173,8 @@ def web_read(url, *, fetch):
 # ── network adapters (real I/O; injected into the pure logic by cli.py) ──
 
 def _load_env():
-    """Load skill-dir .env (utf-8-sig for Notepad BOM). Process env var wins."""
-    env_path = Path(__file__).resolve().parent / ".env"
-    if not env_path.is_file():
-        return
-    try:
-        for line in env_path.read_text(encoding="utf-8-sig").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, _, v = line.partition("=")
-            k, v = k.strip(), v.strip().strip("\"'").strip()
-            if k and v and not os.environ.get(k):
-                os.environ[k] = v
-    except OSError:
-        pass
+    """Skill-dir .env fallback; process env (incl. .codewhale/.env) wins."""
+    project_env.load(Path(__file__).resolve().parent / ".env", override=False)
 
 
 def _post_json(url, body, headers, *, timeout):

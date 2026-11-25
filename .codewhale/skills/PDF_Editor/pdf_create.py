@@ -124,11 +124,14 @@ def _inject_head(html: str) -> str:
 
 # ── 渲染 ─────────────────────────────────────────────────────
 
-def find_browser(configured: str = "") -> str | None:
-    for p in (configured, *_BROWSERS):
+def find_browser(configured: str = "", prefer: str = "") -> str | None:
+    """configured → 默认安装位置 → PATH。prefer（如 "chrome"）：路径/名字含它的先试（Browser_Agent 要 Chrome）。"""
+    def later(c: str) -> bool:                    # sorted 稳定：同组内保持原顺序
+        return bool(prefer) and prefer.lower() not in c.lower()
+    for p in (configured, *sorted(_BROWSERS, key=later)):
         if p and Path(p).is_file():
             return p
-    return next(filter(None, map(shutil.which, _BROWSER_NAMES)), None)
+    return next(filter(None, map(shutil.which, sorted(_BROWSER_NAMES, key=later))), None)
 
 
 def render(html: str, out_pdf: Path, browser: str, timeout: int = RENDER_TIMEOUT) -> None:

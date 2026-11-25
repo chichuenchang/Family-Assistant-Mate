@@ -73,7 +73,8 @@ class Transport:
     def send_text(self, target, text: str) -> None:
         raise NotImplementedError
 
-    def send_photo(self, target, path: str) -> None:
+    def send_photo(self, target, path: str) -> bool | None:
+        """False = 确知没送达（push_photo 据此报失败）；None = SDK 不报结果，视为已发。"""
         raise NotImplementedError
 
     def send_document(self, target, path: str) -> None:
@@ -200,11 +201,24 @@ class Transport:
         self.after_text_sent(user, text)
         return True
 
+    def push_photo(self, user, rel: str) -> bool:
+        """后台推图（浏览截图）：data 相对路径过 sendable 闸门。没送达 = False，不抛。"""
+        ap = sendable(rel)
+        if ap is None:
+            log.warning("推图路径不允许或不存在（跳过）: %s", rel)
+            return False
+        try:
+            return self.send_photo(user, str(ap)) is not False
+        except Exception:
+            log.exception("推图失败: %s", rel)
+            return False
+
     def slow_tick(self) -> None:
         run_ticks(REGISTRY.slow_ticks, self.push_text, self.channel)
 
     def fast_tick(self) -> None:
         run_ticks(REGISTRY.fast_ticks, self.push_text, self.channel)
+        run_ticks(REGISTRY.media_ticks, self.push_text, self.push_photo, self.channel)
 
     def background_tick(self) -> None:
         """一轮后台工作：全部 SLOW_TICKS + FAST_TICKS（轮询型 SDK 每轮调一次）。"""

@@ -121,3 +121,32 @@ def test_member_params_offer_registered_names(monkeypatch):
     props = {t["function"]["name"]: t["function"]["parameters"]["properties"]
              for t in skill_registry.load().schemas}
     assert "enum" not in props["list_transactions"]["member"]      # 空注册表不出空 enum
+
+
+def test_media_ticks_merged(monkeypatch):
+    import types
+
+    def tick(pt, pp, ch):
+        return None
+    fake = types.SimpleNamespace(MEDIA_TICKS=[tick])
+    monkeypatch.setattr(skill_registry, "discover", lambda: [(rt.SKILLS_DIR / "Fake", fake)])
+    reg = skill_registry.load()
+    monkeypatch.undo()
+    skill_registry.load()          # load() 重建全局命令表：还原真实 manifest
+    assert reg.media_ticks == [tick]
+
+
+def test_multi_path_image_result_becomes_one_image_each(monkeypatch):
+    import agent_core
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    agent = agent_core.Agent(idle_clear_hours=0)
+    monkeypatch.setitem(agent_core.REGISTRY.tool_map, "visualize_data",
+                        lambda args: "Jim/cache/charts/a.png\nJim/cache/charts/b.png\n")
+    replies = iter([
+        {"content": "", "tool_calls": [{"id": "c1", "function": {
+            "name": "visualize_data", "arguments": "{}"}}]},
+        {"content": "两张图"},
+    ])
+    monkeypatch.setattr(agent, "_call_llm", lambda msgs, user="": next(replies))
+    reply = agent.handle("画两张图", user="u", member="Jim")
+    assert reply.images == ["Jim/cache/charts/a.png", "Jim/cache/charts/b.png"]

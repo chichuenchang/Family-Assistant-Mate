@@ -1,9 +1,9 @@
 """Google 账号：凭据、access token、带认证的调用（各 Google provider 共用）。
 
-GoogleAccount(prefix)：凭据只从环境变量 <prefix>_CLIENT_ID / _CLIENT_SECRET / _REFRESH_TOKEN 读；
+GoogleAccount(prefix)：凭据只从 os.environ（含 .codewhale/.env，见 project_env）<prefix>_CLIENT_ID / _CLIENT_SECRET / _REFRESH_TOKEN 读；
 refresh token 换 access token 并缓存到过期前 1 分钟（每实例一份）。
 run_loopback_auth：一次性授权（各 provider 的 --auth）。本地回环 OAuth：起临时 http 服务接 code，
-浏览器里用户批准，换 refresh token，结果打印 setx 命令。
+浏览器里用户批准，换 refresh token，写入 .codewhale/.env。
 _http 是全部 Google 流量的唯一出口（测试在此打桩）。
 """
 
@@ -18,6 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+
+import project_env
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -120,9 +122,9 @@ def run_loopback_auth(prefix: str, scope: str, *, consent: str, next_step: str,
     client_id = os.environ.get(f"{prefix}_CLIENT_ID", "")
     client_secret = os.environ.get(f"{prefix}_CLIENT_SECRET", "")
     if not client_id or not client_secret:
-        print(f"先设置 {prefix}_CLIENT_ID / {prefix}_CLIENT_SECRET 环境变量"
+        print(f"先在 .codewhale/.env 填 {prefix}_CLIENT_ID / {prefix}_CLIENT_SECRET"
               f"（Google Cloud Console → OAuth 客户端，Desktop app 类型{client_hint}），"
-              "然后开新终端重跑。")
+              "然后重跑。")
         raise SystemExit(1)
 
     code_holder: dict = {}
@@ -183,6 +185,6 @@ def run_loopback_auth(prefix: str, scope: str, *, consent: str, next_step: str,
               "去 https://myaccount.google.com/permissions 移除本应用授权后重跑。")
         raise SystemExit(1)
 
-    print("\n授权成功。在你自己的终端执行（之后开新终端生效）：\n")
-    print(f'  setx {prefix}_REFRESH_TOKEN "{refresh}"')
+    path = project_env.set_key(f"{prefix}_REFRESH_TOKEN", refresh)
+    print(f"\n授权成功：{prefix}_REFRESH_TOKEN 已写入 {path}")
     print(f"\n{next_step}")

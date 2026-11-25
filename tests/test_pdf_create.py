@@ -146,6 +146,15 @@ def test_find_browser_prefers_configured(tmp_path):
     assert pdf_create.find_browser(str(exe)) == str(exe)
 
 
+def test_find_browser_prefer_reorders_candidates(monkeypatch, tmp_path):
+    edge, chrome = tmp_path / "msedge.exe", tmp_path / "chrome.exe"
+    for p in (edge, chrome):
+        p.write_bytes(b"")
+    monkeypatch.setattr(pdf_create, "_BROWSERS", [str(edge), str(chrome)])
+    assert pdf_create.find_browser() == str(edge)
+    assert pdf_create.find_browser(prefer="chrome") == str(chrome)
+
+
 def test_render_real_browser(tmp_path):
     pypdfium2 = pytest.importorskip("pypdfium2")
     browser = pdf_create.find_browser()

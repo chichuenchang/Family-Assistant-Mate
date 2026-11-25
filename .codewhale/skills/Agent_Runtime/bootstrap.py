@@ -51,3 +51,6 @@ def ensure_paths() -> None:
 
 
 ensure_paths()
+
+import project_env  # noqa: E402  .codewhale/.env 覆盖进 os.environ（入口都经此处）
+project_env.load()

@@ -54,9 +54,7 @@ info = ocr_extract("path/to/receipt.jpg")  # 票据/账单（图片或 PDF）
 
 1. 注册 [腾讯云 OCR](https://console.cloud.tencent.com/ocr/overview)（个人实名认证，1000 次/月免费）
 2. 访问 [API 密钥管理](https://console.cloud.tencent.com/cam/capi) 获取 SecretId 和 SecretKey
-3. 设置环境变量：
-   - `TENCENT_SECRET_ID`
-   - `TENCENT_SECRET_KEY`
+3. `.codewhale/.env` 填 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`
    - （可选）结构化提取用的 LLM key：跟 `LLM_MODEL` 走，见 [Agent_Runtime/SKILL.md](../Agent_Runtime/SKILL.md) 模型表
 
 ## 依赖

@@ -42,6 +42,9 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# 直接运行时 .codewhale/.env（bootstrap load）须先于读 key；--extract 另需 llm_client
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); import bootstrap  # noqa: E402,E702,F401
+
 SECRET_ID = os.environ.get("TENCENT_SECRET_ID", "")
 SECRET_KEY = os.environ.get("TENCENT_SECRET_KEY", "")
 
@@ -312,8 +315,6 @@ def is_available() -> bool:
 
 def main() -> int:
     import argparse
-    # 直接运行时 --extract 要 import llm_client：挂全部 skill 目录（进程内调用已由调用方挂好）
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Agent_Runtime")); import bootstrap  # noqa: E402,E702,F401
     parser = argparse.ArgumentParser(description="OCR — 图片文字识别 / 票据结构化提取")
     parser.add_argument("image", help="图片路径")
     parser.add_argument("--extract", action="store_true",
@@ -321,7 +322,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if not is_available():
-        print("OCR 未配置：请设置环境变量 TENCENT_SECRET_ID 和 TENCENT_SECRET_KEY",
+        print("OCR 未配置：.codewhale/.env 填 TENCENT_SECRET_ID 和 TENCENT_SECRET_KEY",
               file=sys.stderr)
         return 1
 

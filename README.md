@@ -98,9 +98,9 @@
 # 1. 安装依赖（Python 3.10+；核心仅 stdlib，requirements.txt 全可选，逐条注释用途与缺失降级）
 pip install -r requirements.txt
 
-# 2. 设 LLM API key（必须；默认模型 deepseek-flash。其他模型：config.json llm.models 加条目 + 对应 key，聊天里 /model 切）
-setx DEEPSEEK_API_KEY "sk-xxx"
-setx ZHIPU_API_KEY "xxx"              # 可选：glm-5.3-flash（/model glm），也是 DeepSeek 无响应时的自动顶替（config.json llm）
+# 2. 密钥全放 .codewhale/.env（gitignore）。必填 DEEPSEEK_API_KEY；
+#    ZHIPU_API_KEY 可选：glm-5.3-flash（/model glm），也是 DeepSeek 无响应时的自动顶替（config.json llm）
+copy .codewhale\.env.example .codewhale\.env      # 填值；旧 setx 值迁入：project_env.py --import-windows
 
 # 3. 登记家庭成员（必须 — 未登记的来源一律静默忽略；--alias 登记文档里的法定名，Agent 据此识别"这是谁的"）
 python .codewhale/skills/Expense_Tracker/cli.py member-add 爸爸 --telegram 123456789 --wechat wxid_xxx --alias 法定名
@@ -109,30 +109,26 @@ python .codewhale/skills/Expense_Tracker/cli.py member-list
 # 4. 启动 Agent（终端出二维码；默认写调试日志 data/.state/bot_debug.log，--no-debug 关闭）
 python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 
-# （可选）设 OCR：
-#   setx TENCENT_SECRET_ID "xxx"
-#   setx TENCENT_SECRET_KEY "xxx"
+# 以下可选项的 key 同样填 .codewhale/.env；各 --auth 自动把 refresh token 写进去
+# （可选）OCR：TENCENT_SECRET_ID / TENCENT_SECRET_KEY
 
 # （可选）云盘备份（当前为 Google Drive 实现，可换其他云盘；步骤详见 Remote_Backup/SKILL.md）：
-#   setx GDRIVE_CLIENT_ID "xxx"
-#   setx GDRIVE_CLIENT_SECRET "xxx"
-#   python .codewhale/skills/Remote_Backup/backup_provider.py --auth  # 一次性授权，按提示设 GDRIVE_REFRESH_TOKEN
+#   填 GDRIVE_CLIENT_ID / GDRIVE_CLIENT_SECRET
+#   python .codewhale/skills/Remote_Backup/backup_provider.py --auth  # 一次性授权
 #   config.json 设 backup.enabled: true
 
 # （可选）远程日历同步（当前为 Google Calendar + Tasks 实现；步骤详见 Calendar_Keeper/SKILL.md）：
-#   setx GCAL_CLIENT_ID "xxx"        # 可复用上面的同一个 OAuth 客户端
-#   setx GCAL_CLIENT_SECRET "xxx"
-#   python .codewhale/skills/Calendar_Keeper/calendar_provider.py --auth  # 一次性授权，按提示设 GCAL_REFRESH_TOKEN
+#   填 GCAL_CLIENT_ID / GCAL_CLIENT_SECRET    # 可复用上面的同一个 OAuth 客户端
+#   python .codewhale/skills/Calendar_Keeper/calendar_provider.py --auth  # 一次性授权
 #   config.json 设 calendar.enabled: true
 
 # （可选）邮箱读写（当前为 Gmail 实现；步骤详见 Mail_Keeper/SKILL.md）：
-#   setx GMAIL_CLIENT_ID "xxx"       # 可复用上面的同一个 OAuth 客户端（需启用 Gmail API）
-#   setx GMAIL_CLIENT_SECRET "xxx"
-#   python .codewhale/skills/Mail_Keeper/gmail_provider.py --auth  # 一次性授权，按提示设 GMAIL_REFRESH_TOKEN
+#   填 GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET  # 可复用上面的同一个 OAuth 客户端（需启用 Gmail API）
+#   python .codewhale/skills/Mail_Keeper/gmail_provider.py --auth  # 一次性授权
 #   data/members.json 给该成员加 mail 块
 
 # ── 或用 Telegram（多人，推荐） ──
-#   setx TELEGRAM_BOT_TOKEN "xxx"
+#   填 TELEGRAM_BOT_TOKEN
 #   python .codewhale/skills/Agent_Runtime/telegram_bot.py   # 同样默认写调试日志，--no-debug 关闭
 ```
 
@@ -145,7 +141,7 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 
 **方式二：Telegram**（多人使用，推荐）
 1. Telegram 搜 **@BotFather** → `/newbot` → 获取 Token
-2. `setx TELEGRAM_BOT_TOKEN "xxx"`
+2. `.codewhale/.env` 填 `TELEGRAM_BOT_TOKEN=xxx`
 3. `python .codewhale/skills/Agent_Runtime/telegram_bot.py`
 4. 把 Bot 链接发给家人，并在电脑上用 `member-add` 登记每个人的 chat id（未登记的人 Bot 不会回应）
 
@@ -157,8 +153,8 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 
 ## 换新机 / 灾难恢复
 
-代码在 git，**家庭数据在你自己的云盘备份里**，凭据走环境变量（按设计不进备份、不进 git）。
-换机就三步：克隆代码 → 恢复数据 → 重设凭据。
+代码在 git，**家庭数据在你自己的云盘备份里**，凭据在 `.codewhale/.env`（按设计不进备份、不进 git）。
+换机就三步：克隆代码 → 拷回 `.codewhale/.env`（或重填）→ 恢复数据。
 
 **恢复地图**
 
@@ -167,7 +163,8 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 | 代码 | git 仓库 | `git clone` |
 | 家庭数据（账本/票据/文档/备忘/日程/成员注册表） | 你的 Google Drive 备份 | `backup-restore` |
 | `config.json` | 随 git 克隆（也在备份里） | 自带 |
-| 凭据（GDRIVE_* / GCAL_* / GMAIL_* / 微信 / Telegram / OCR / DeepSeek） | **只在环境变量，不在备份** | 手动重设 / 重新授权 |
+| 凭据（GDRIVE_* / GCAL_* / GMAIL_* / Telegram / OCR / DeepSeek） | **只在 `.codewhale/.env`，不在备份** | 从旧机拷 / 重填 + 重新授权 |
+| 微信登录 | `data/.state/wechat_creds.json`，不在备份 | 重新扫码 |
 
 **步骤**
 
@@ -176,12 +173,9 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 git clone <你的仓库地址> && cd FamilyAssistant
 pip install -r requirements.txt
 
-# 2. 设 Google Drive 凭据（恢复用）。CLIENT_ID/SECRET 来自 Google Cloud Console 的 OAuth 客户端
-setx GDRIVE_CLIENT_ID "xxx"
-setx GDRIVE_CLIENT_SECRET "xxx"
-#    refresh token 若已保存：setx GDRIVE_REFRESH_TOKEN "xxx"
-#    丢了也没关系——数据还在云端，重新授权一次即可（开新终端让 setx 生效后）：
-python .codewhale/skills/Remote_Backup/backup_provider.py --auth   # 浏览器批准 → 按提示 setx GDRIVE_REFRESH_TOKEN
+# 2. 凭据：旧机 .codewhale/.env 拷来即全部就位，跳到第 3 步。没有就从 .env.example 复制，
+#    至少填 GDRIVE_CLIENT_ID / GDRIVE_CLIENT_SECRET（Google Cloud Console 的 OAuth 客户端），再重新授权：
+python .codewhale/skills/Remote_Backup/backup_provider.py --auth   # 浏览器批准 → GDRIVE_REFRESH_TOKEN 自动写入 .env
 
 # 3. 引导恢复：先恢复"持有注册表的主成员"——即备份 scope 含 members.json/config.json 的那个成员
 #    （members.json 在该成员的备份里，故首次用显式参数、无需本地注册表）。三处占位按实际替换：
@@ -190,14 +184,7 @@ python .codewhale/skills/Remote_Backup/cli.py backup-restore --member "<主成�
 #    → 拉回 config.json + data/members.json + 该成员的全部数据
 #    其他成员若各有备份：再 backup-restore --member "成员名"（此时注册表已恢复，正常模式）
 
-# 4. 重设其余凭据（都不在备份里）
-setx DEEPSEEK_API_KEY "sk-xxx"        # 必须（可选：LLM_MODEL / LLM_EFFORT 启动默认；其他模型见 config.json llm；聊天里 /model /effort 可运行时切换）
-setx ZHIPU_API_KEY "xxx"              # 可选，同电脑端步骤 2
-setx GCAL_CLIENT_ID "xxx"             # 日历同步（可复用 Drive 的同一 OAuth 客户端）
-setx GCAL_CLIENT_SECRET "xxx"
-setx GCAL_CALENDAR_ID "xxx"           # 可选，默认 primary 主日历
-#    GCAL refresh token 同样可 calendar_provider.py --auth 重授
-#    可选：setx TENCENT_SECRET_ID / TENCENT_SECRET_KEY（OCR）、setx TELEGRAM_BOT_TOKEN（Telegram）
+# 4. 重填的话：.env 其余键补齐（DEEPSEEK_API_KEY 必须，其余见 .env.example），GCAL/GMAIL 各跑 --auth
 
 # 5. 启动 Bot；微信通道重新扫码登录（wechat_creds.json 自动重建，不从备份恢复）
 python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run     # 或 telegram_bot.py
@@ -218,6 +205,7 @@ python .codewhale/skills/Remote_Backup/cli.py backup-verify --member "<主成员
 ```
 FamilyAssistant/
 ├── .codewhale/
+│   ├── .env.example      ← 全部密钥键名；复制为 .env（gitignore）填值
 │   └── skills/
 │       ├── Expense_Tracker/  ← 记账技能
 │       │   ├── SKILL.md
@@ -279,6 +267,7 @@ FamilyAssistant/
 │           ├── agent_core.py     ← 频道无关 Agent 核心（全量上下文）
 │           ├── members.py        ← 成员注册表（存 git 忽略的 data/members.json）
 │           ├── paths.py          ← 磁盘布局单一事实源（member_store / family_*）
+│           ├── project_env.py    ← .codewhale/.env 读写；--import-windows 迁 setx 旧值
 │           ├── migrate_storage.py ← 一次性存储迁移（单库 → 按成员分库）
 │           ├── knowking_jobs.py  ← 懂王（KnowKing）后台任务桥（提交/轮询/推送报告）
 │           ├── wechat_ilink.py   ← 微信传输层

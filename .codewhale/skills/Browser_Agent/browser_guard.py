@@ -15,6 +15,7 @@ ORDER_LABELS = frozenset("""
 支付 去支付 立即支付 确认支付 付款 去付款 立即付款 确认付款 提交订单 确认订单 确认下单 下单 立即下单 去下单
 购买 立即购买 马上购买 立即抢购 确认购买 结算 去结算 立即结算 预订 立即预订 马上预订 确认预订 预定 立即预定
 订 立即订 订购 立即订购 同意并支付 同意并提交
+现在购买 现在支付 现在付款 现在预订 马上支付 马上付款 结账 去结账 立即结账
 """.split()) | frozenset([
     "pay", "pay now", "place order", "place your order", "submit order", "confirm order",
     "complete order", "order now", "buy now", "buy it now", "purchase", "complete purchase",

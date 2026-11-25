@@ -157,6 +157,13 @@ def test_plain_content_is_report(go, drv):
     assert r.status == "done" and r.report == "直接回答"
 
 
+def test_task_message_carries_current_date(go, drv):
+    chat = script("x")
+    go(chat, drv)
+    import time
+    assert time.strftime("%Y-%m-%d") in chat.seen[0][1]["content"]
+
+
 def test_meta_keys_not_sent_back(go, drv):
     chat = script([call("read_page")], [call("done", report="x")])
     go(chat, drv)

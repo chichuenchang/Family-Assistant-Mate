@@ -16,6 +16,15 @@ python .codewhale/skills/Browser_Agent/cli.py browser-login --member <名字>   
 - VPN 注入 DLL 不影响 Playwright 驱动（uv 会崩，这个不会）。
 - 起 Chrome 到端口应答 0.05–0.5 s；`connect_over_cdp` 0.2–0.3 s；视口截图 0.13–0.18 s。
 - `navigator.webdriver` = false（普通进程启动 + 挂端口，无自动化旗标）。
+- 端到端（deepseek-flash，未登录 profile）：
+
+| 任务 | 用时 | 模型调用 | tokens 入/出 |
+|---|---|---|---|
+| 打开 example.com，截图，报标题 | 8.5 s | 4 | 7.3k / 0.3k |
+| Bing 图片找螳螂存原图 | 36.5 s | 12 | 58k / 1.2k |
+| Amazon 搜商品，点 Buy Now | 29 s | 8 | 44k / 1.0k |
+
+- Amazon 中文界面按钮是「现在购买」，最初的拦截表没有：真页面验证过才补上。新平台上线前先看其按钮原文。
 
 ## 坑
 

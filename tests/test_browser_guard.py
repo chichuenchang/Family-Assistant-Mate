@@ -6,7 +6,8 @@ import browser_guard as g
 
 @pytest.mark.parametrize("label", [
     "支付 ¥1,234.00", "立即购买", " PAY NOW ", "Place  your order", "Buy Now", "提交订单",
-    "去结算(3)", "Reserve", "预订", "Ｐａｙ", "Proceed to checkout →", "I'll reserve", "￥99 立即支付"])
+    "去结算(3)", "Reserve", "预订", "Ｐａｙ", "Proceed to checkout →", "I'll reserve", "￥99 立即支付",
+    "现在购买", "去结账", "马上支付"])
 def test_order_labels_refused(label):
     assert g.check_click(label)
 

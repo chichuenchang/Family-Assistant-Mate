@@ -238,7 +238,7 @@ def run(task: str, driver, *, chat, model: str, effort: str, cfg: dict, shots_di
         sees_images: bool = True, clock: Callable[[], float] = time.monotonic) -> Result:
     r = _Run(driver, chat, model, effort, cfg, shots_dir, emit, sees_images)
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": task}]
+                            {"role": "user", "content": f"{task}\n\n（当前时间 {time.strftime('%Y-%m-%d %H:%M')}）"}]
     deadline = clock() + float(cfg["timeout_s"])
     steps = 0
 

@@ -88,6 +88,7 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 | `agent`（context_max_tokens/idle_clear_hours/tool_rounds） | `agent_core`（单条消息工具往返上限；上下文自动管理：历史 token 预算超出→从最旧一问一答成对丢弃；用户闲置超 N 小时→下一条消息前清空其历史；0=关闭。用户也可发 /clear 手动清空） |
 | ~~`members`~~（已迁出 → `data/members.json`，git 不跟踪） | `Agent_Runtime/members.py`（resolve / member-* 读写均走该文件） |
 | `wechat.allowed_commands` | `Expense_Tracker/agent_tools.py`（AGENT_COMMANDS；其余 skill 的命令由各自 manifest 恒定放行） |
+| `browser` | `Browser_Agent/browser_cfg.py`（每次读，缺键取默认；键义见其 `_comment`） |
 | `knowking`（project_dir/timeout_s） | `Agent_Runtime/knowking_jobs.py`（懂王舆情桥：KnowKing 项目根定位 + `kk ask` 子进程超时；环境变量 `KNOWKING_DIR` 可覆盖 project_dir） |
 
 改这些值只改 `config.json`（改后重启进程生效）。config 缺失/损坏时各处有应急回退默认值。

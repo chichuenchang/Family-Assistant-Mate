@@ -73,7 +73,8 @@ class Transport:
     def send_text(self, target, text: str) -> None:
         raise NotImplementedError
 
-    def send_photo(self, target, path: str) -> None:
+    def send_photo(self, target, path: str) -> bool | None:
+        """False = 确知没送达（push_photo 据此报失败）；None = SDK 不报结果，视为已发。"""
         raise NotImplementedError
 
     def send_document(self, target, path: str) -> None:

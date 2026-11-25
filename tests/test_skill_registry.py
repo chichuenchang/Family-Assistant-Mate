@@ -121,3 +121,16 @@ def test_member_params_offer_registered_names(monkeypatch):
     props = {t["function"]["name"]: t["function"]["parameters"]["properties"]
              for t in skill_registry.load().schemas}
     assert "enum" not in props["list_transactions"]["member"]      # 空注册表不出空 enum
+
+
+def test_media_ticks_merged(monkeypatch):
+    import types
+
+    def tick(pt, pp, ch):
+        return None
+    fake = types.SimpleNamespace(MEDIA_TICKS=[tick])
+    monkeypatch.setattr(skill_registry, "discover", lambda: [(rt.SKILLS_DIR / "Fake", fake)])
+    reg = skill_registry.load()
+    monkeypatch.undo()
+    skill_registry.load()          # load() 重建全局命令表：还原真实 manifest
+    assert reg.media_ticks == [tick]

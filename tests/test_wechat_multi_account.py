@@ -107,3 +107,30 @@ def test_quoting_a_push_resolves_pushed_text():
     ts = wechat_ilink._SENT_REPLIES[-1][0]
     item = {"ref_msg": {"message_item": {"msg_id": "7", "create_time_ms": ts}}}
     assert "新邮件：学校通知" in wechat_ilink._quoted_text(item, user="mom")
+
+
+class PhotoBot(FakeBot):
+    def __init__(self, users=()):
+        super().__init__(users)
+        self.images = []
+
+    def send_image(self, to, path, **kw):
+        self.images.append((to, path))
+
+
+def test_photo_push_to_wxid_uses_owning_bot():
+    a, b = PhotoBot(users=["dad"]), PhotoBot(users=["mom"])
+    wechat_ilink.WeChatTransport([a, b]).send_photo("mom", "x.png")
+    assert b.images == [("mom", "x.png")] and a.images == []
+
+
+def test_photo_reply_to_message_uses_reply_image():
+    class Msg:
+        def __init__(self):
+            self.got = []
+
+        def reply_image(self, path):
+            self.got.append(path)
+    m = Msg()
+    wechat_ilink.WeChatTransport([PhotoBot()]).send_photo(m, "x.png")
+    assert m.got == ["x.png"]

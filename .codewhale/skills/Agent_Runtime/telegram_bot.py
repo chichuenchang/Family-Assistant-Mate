@@ -209,8 +209,8 @@ class TelegramTransport(Transport):
     def send_text(self, target, text: str) -> bool:
         return send_message(target, text)
 
-    def send_photo(self, target, path: str) -> None:
-        send_photo(target, path)
+    def send_photo(self, target, path: str) -> bool:
+        return send_photo(target, path)
 
     def send_document(self, target, path: str) -> None:
         send_document(target, path)

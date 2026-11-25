@@ -20,6 +20,7 @@ manifest 是普通模块，模块级属性即契约（全部可选，缺省为�
     MESSAGE_TICKS   list[callable()]  已注册成员每条消息到达时跑（节流自理）
     SLOW_TICKS      list[callable(push_text, channel)]  后台慢拍（~10 分钟）：提醒/备份
     FAST_TICKS      list[callable(push_text, channel)]  后台快拍（~20 秒）：异步结果投递
+    MEDIA_TICKS     list[callable(push_text, push_photo, channel)]  同快拍，另可推图（push_photo(user, data 相对路径)->bool）
 
 新增 skill = 在其目录放 agent_tools.py；agent_core 零改动。
 """
@@ -81,6 +82,7 @@ class Registry:
     message_ticks: list[Callable] = field(default_factory=list)
     slow_ticks: list[Callable] = field(default_factory=list)
     fast_ticks: list[Callable] = field(default_factory=list)
+    media_ticks: list[Callable] = field(default_factory=list)
 
     def context(self, member: str) -> str:
         """全部动态块拼接；单块失败只记日志，绝不拖垮 handle()。"""
@@ -194,4 +196,5 @@ def load() -> Registry:
         reg.message_ticks.extend(getattr(m, "MESSAGE_TICKS", ()))
         reg.slow_ticks.extend(getattr(m, "SLOW_TICKS", ()))
         reg.fast_ticks.extend(getattr(m, "FAST_TICKS", ()))
+        reg.media_ticks.extend(getattr(m, "MEDIA_TICKS", ()))
     return reg

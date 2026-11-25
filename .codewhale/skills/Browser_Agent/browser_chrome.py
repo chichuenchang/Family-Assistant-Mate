@@ -16,12 +16,6 @@ from pathlib import Path
 import jsonfile
 import paths as _paths
 
-_CHROME_PATHS = [
-    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-]
 _LAUNCH_WAIT_S = 15
 _CLOSE_WAIT_S = 5
 
@@ -31,12 +25,9 @@ class ChromeError(Exception):
 
 
 def find_chrome(configured: str = "") -> str | None:
-    """config 指定 → Chrome 默认位置 → PDF_Editor 的探测（含 Edge / PATH）。"""
-    for p in (configured, *_CHROME_PATHS):
-        if p and Path(p).is_file():
-            return p
-    import pdf_create  # 延迟：仅兜底时用
-    return pdf_create.find_browser()
+    """config 指定 → Chrome → Edge / PATH。浏览器位置表只在 PDF_Editor/pdf_create.py 一处。"""
+    import pdf_create  # 延迟：导入本模块不拉起 PDF_Editor
+    return pdf_create.find_browser(configured, prefer="chrome")
 
 
 def launch_argv(exe: str, profile: Path, port: int) -> list[str]:

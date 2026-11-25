@@ -78,7 +78,8 @@ _HARD_EXCLUDE_NAMES = {".telegram_offset", ".doc_reminder_state",
                        "wechat_recent_msgs.json", "wechat_sent_msgs.json"}
 
 # 永不进备份的目录段：.state（运行时状态/凭据/瞬态任务，含频道 id，绝不镜像上云）、
-# cache（可再生产物）。后三个是迁入 .state/ 与 cache/ 之前的旧位置，未迁完的目录仍需挡住。
+# cache（可再生产物）、browser_profile（Chrome 登录 cookie）。charts / web_images / .knowking_jobs
+# 是迁入 .state/ 与 cache/ 之前的旧位置，未迁完的目录仍需挡住。
 _HARD_EXCLUDE_DIRS = {_paths.STATE_DIRNAME, _paths.CACHE_DIRNAME,
                       "charts", "web_images", ".knowking_jobs", "browser_profile"}
 

@@ -35,6 +35,8 @@ import sys
 import urllib.error
 import urllib.request
 
+from image_sniff import image_format
+
 _log = logging.getLogger("fam.agent")
 
 DEFAULT_TEMPERATURE = 0.3
@@ -151,9 +153,8 @@ def _public(msg: dict) -> dict:
     return {k: v for k, v in msg.items() if not k.startswith("_")}
 
 
-# DeepSeek 单图上限 32 MiB（base64 前），取 20 MiB 留余量；按内容判格式，扩展名不可信（微信存图常 .jpg 实为 png）
+# DeepSeek 单图上限 32 MiB（base64 前），取 20 MiB 留余量
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
-_IMAGE_MAGIC = ((b"\xff\xd8\xff", "jpeg"), (b"\x89PNG", "png"), (b"GIF8", "gif"))
 
 
 def image_part(path: str) -> dict | None:
@@ -166,9 +167,7 @@ def image_part(path: str) -> dict | None:
         return None
     if len(data) > MAX_IMAGE_BYTES:
         return None
-    fmt = next((f for magic, f in _IMAGE_MAGIC if data.startswith(magic)), None)
-    if fmt is None and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        fmt = "webp"
+    fmt = image_format(data)
     if fmt is None:
         return None
     url = f"data:image/{fmt};base64," + base64.b64encode(data).decode()

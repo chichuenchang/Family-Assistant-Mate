@@ -20,7 +20,7 @@
 | **Remote Backup** | 用户数据云盘镜像（可选；作者已实现 Google Drive provider，用户可按契约换成自己想要的云端存储） | [SKILL.md](.codewhale/skills/Remote_Backup/SKILL.md) | 备份、同步、云盘、恢复数据 |
 | **Web Reach** | 只读联网：搜最新资讯、抓取/总结网页、转写 YouTube 字幕（搜索需付费 key；YouTube 需 yt-dlp，缺失优雅降级） | [SKILL.md](.codewhale/skills/Web_Reach/SKILL.md) | 最新新闻、查一下、外面在发生什么、总结链接、YouTube、视频 |
 | **Browser Agent** | 后台驱动电脑上可见 Chrome：跨平台比价（机票/酒店/商品）、看地图、找图、任意网站，途中推截图，只查不买（付款/下单按钮代码拦截）；需 playwright + Chrome | [SKILL.md](.codewhale/skills/Browser_Agent/SKILL.md) | 比价、机票、酒店、买东西、地图、找图片、打开网站、截图 |
-| **Any Search** | 垂直领域（finance/health/academic/code 等）结构化搜索 + 网页全文抽取 + 搜图（可选 `ANYSEARCH_API_KEY`，未配置走匿名） | [SKILL.md](.codewhale/skills/Any_Search/SKILL.md) | 行情、学术、健康、垂直领域查询、图片 |
+| **Any Search** | 垂直领域（finance/health/academic/code 等）结构化搜索 + 网页全文抽取（可选 `ANYSEARCH_API_KEY`，未配置走匿名） | [SKILL.md](.codewhale/skills/Any_Search/SKILL.md) | 行情、学术、健康、垂直领域查询 |
 | **Agent Runtime** | 频道无关 Agent 大脑 + 远程频道传输层（微信、Telegram）+ 懂王（KnowKing）跨平台舆情桥（外部 uv 项目，后台跑 + 完成推送） | [SKILL.md](.codewhale/skills/Agent_Runtime/SKILL.md) | 远程频道、微信、Telegram、Bot 接入、Agent 核心、新增频道、knowking、kk、懂王 |
 
 ## 运行时提示词

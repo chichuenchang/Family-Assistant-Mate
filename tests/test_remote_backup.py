@@ -680,6 +680,10 @@ class TestScopeResolver:
         assert backup_sync._excluded("data/Alex/cache/charts/a.png") is True
         assert backup_sync._excluded("data/Family/documents/cache/a.pdf") is False
 
+    def test_pre_cache_web_images_dir_hard_excluded(self, sr):
+        # fetch_images 已删，旧布局 data/<成员>/web_images/ 不再被搬进 cache/，仍须挡住
+        assert backup_sync._excluded("data/Jim/web_images/1_mantis_0.jpg") is True
+
 
 def test_cmd_reorg_invokes_provider(monkeypatch, capsys):
     import importlib.util

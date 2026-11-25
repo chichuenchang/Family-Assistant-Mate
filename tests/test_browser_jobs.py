@@ -253,6 +253,13 @@ def test_last_report_other_member_or_expired(jdir, pt, pp):
     assert bj.last_report("Jim", jdir=jdir, now=time.time() + 5 * 3600) == ""
 
 
+def test_last_report_kept_while_idle_clear_off(jdir, pt, pp, monkeypatch):
+    monkeypatch.setitem(rt.CONFIG, "agent", {"idle_clear_hours": 0})
+    finished(jdir)
+    bj.deliver(pt, pp, "wechat", jdir=jdir)
+    assert bj.last_report("Jim", jdir=jdir, now=time.time() + 20 * 3600)
+
+
 def test_delivered_pruned_after_a_day(jdir, pt, pp):
     jid = finished(jdir)
     bj.deliver(pt, pp, "wechat", jdir=jdir)

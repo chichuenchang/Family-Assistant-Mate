@@ -275,7 +275,8 @@ def deliver(push_text, push_photo, channel: str, *, jdir: Optional[Path] = None,
 def last_report(member: str, *, jdir: Optional[Path] = None, now: float | None = None) -> str:
     """CONTEXT_FNS：最近一次已投递的成功浏览报告（idle_clear_hours 内），围栏后注入。"""
     now = time.time() if now is None else now
-    ttl = float((rt.CONFIG.get("agent") or {}).get("idle_clear_hours") or 4) * 3600
+    hours = float((rt.CONFIG.get("agent") or {}).get("idle_clear_hours", 4) or 0)   # 同 agent_core：0 = 不清
+    ttl = hours * 3600 if hours > 0 else _KEEP_DELIVERED_S
     best = None
     for j in _jobs(jobs_dir(jdir)):
         if (j.get("member") == member and j.get("status") == "delivered"

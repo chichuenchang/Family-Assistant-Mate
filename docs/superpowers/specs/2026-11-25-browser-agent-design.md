@@ -26,7 +26,7 @@ Why: user hands FAM whole browsing jobs from phone: better image search, flight/
 - `browse` = background job, model on `Agent_Runtime/knowking_jobs.py`: job file `data/.state/.browser_jobs/<id>.json`, daemon thread, ack now, `FAST_TICKS` delivers. Own model loop, own message list: main agent's `tool_rounds` 30 / `context_max_tokens` 30000 do not apply.
 - One job at a time, whole machine (one visible window). Second `browse` gets busy reply. `browse_stop` sets flag; loop ends after current step, sends partial report.
 - No mid-job questions. Missing detail: job ends, report asks; main agent starts new job with complete task. Prompt rule: `task` self-contained (dates, budget, sites user named).
-- Routing (prompt rules): facts stay on `web_search`; `browse` on `web_search` `[错误]`, on price comparison, maps, "open/look at site". Picture requests go to `browse`; `fetch_images` stays for when browser unavailable.
+- Routing (prompt rules): facts stay on `web_search`; `browse` on `web_search` `[错误]`, on price comparison, maps, "open/look at site". Picture requests go to `browse`; stock-photo `fetch_images` removed, no fallback.
 
 ### Inner loop
 
@@ -74,7 +74,7 @@ Why: user hands FAM whole browsing jobs from phone: better image search, flight/
 
 - `FAST_TICKS` contract is `(push_text, channel)`: text only. Needs photo push: `Transport.push_photo` + contract extension. Touches Agent_Runtime.
 - Job queues screenshots in job file; tick drains (lag ~20 s WeChat, ~30 s Telegram). Report last.
-- Screenshots and saved images in `data/<member>/cache/browser/`, 7-day cleanup as `web_images`.
+- Screenshots and saved images in `data/<member>/cache/browser/`, 7-day cleanup (`paths.prune_older`).
 
 ### Dependency
 

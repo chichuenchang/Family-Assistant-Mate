@@ -7,7 +7,7 @@ FAM — 磁盘布局解析（数据落盘位置的单一事实来源）
     data/<成员目录>/inbox/YYYY-MM/          来图（按发送成员归属；日程/待办来图常驻此处，1 年后清）
     data/<成员目录>/pdf_edits/<id>/         PDF 编辑会话（plan/layout/产出），私有
     data/<成员目录>/pdf_creates/<id>/       从零生成 PDF 会话（source.html/产出/预览），私有
-    data/<成员目录>/cache/<名>/             可再生产物（charts / web_images），不入备份
+    data/<成员目录>/cache/<名>/             可再生产物（charts / browser），不入备份
     data/Family/ledger.db                   家庭账本（收支/定期/划转/报税/汇率，纯财务）
     data/Family/documents.db                家庭文档库（documents + profiles，家庭共享）
     data/Family/receipts/YYYY-MM/           票据图片
@@ -163,7 +163,7 @@ def member_mail_rules(member: str) -> Path:
 
 
 def member_cache_dir(member: str, name: str) -> Path:
-    """可再生产物 data/<成员>/cache/<name>/（charts、web_images…），不存在则创建。
+    """可再生产物 data/<成员>/cache/<name>/（charts、browser…），不存在则创建。
 
     旧布局为 data/<成员>/<name>/，首次访问时搬入。
     """

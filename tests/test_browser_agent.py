@@ -1,4 +1,4 @@
-# tests/test_browser_agent.py — Browser_Agent manifest、browser-login CLI、fetch_images 降级
+# tests/test_browser_agent.py — Browser_Agent manifest、browser-login CLI
 import json
 import subprocess
 import sys
@@ -57,12 +57,6 @@ def test_browse_busy_is_not_an_error(monkeypatch):
 def test_browse_stop_routes(monkeypatch):
     monkeypatch.setattr(bj, "stop", lambda ch, u: f"{ch}/{u}")
     assert M.tool_browse_stop({"__channel": "wechat", "__user": "u"}) == "wechat/u"
-
-
-def test_fetch_images_demoted():
-    d = next(s for s in agent_core.REGISTRY.schemas
-             if s["function"]["name"] == "fetch_images")["function"]["description"]
-    assert "browse 不可用" in d
 
 
 def test_prompt_routes_to_browse():

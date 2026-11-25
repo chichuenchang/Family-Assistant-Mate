@@ -24,7 +24,6 @@ from playwright.sync_api import sync_playwright
 
 import browser_guard
 import browser_humanize as hz
-from anysearch import sniff_image_ext
 from browser_driver import LABEL_CAP, MAX_ELEMENTS, TEXT_CAP, DriverError, DriverGone, Element, Snapshot
 
 NAV_TIMEOUT_MS = 30_000
@@ -94,6 +93,9 @@ _TAG_JS = "([start, cap, labelCap]) => {" + _DESCRIBE_JS + r"""
   return {items: out, next: n};
 }
 """
+
+_MAGIC = [(b"\xff\xd8\xff", ".jpg"), (b"\x89PNG", ".png"), (b"GIF8", ".gif")]
+
 
 def _guard(fn):
     """Playwright 异常 → DriverGone（浏览器没了）/ DriverError（其余，可恢复）。"""
@@ -363,7 +365,7 @@ class PlaywrightDriver:
         data = base64.b64decode(src.split(",", 1)[1]) if src.startswith("data:") else self._download(src)
         if len(data) > IMG_MAX_BYTES:
             raise DriverError("图片超过 5 MB")
-        ext = sniff_image_ext(data)
+        ext = next((e for magic, e in _MAGIC if data.startswith(magic)), None)
         if ext is None:
             data, ext = _to_png(data), ".png"
         dest = Path(dest_dir)

@@ -124,7 +124,7 @@ class Registry:
         if not ok:
             return out
         if name in self.image_tools:
-            # 每行一张（fetch_images 多张）；按行不按空白拆——路径可含空格
+            # 每行一张；按行不按空白拆——路径可含空格
             out.images = [ln.strip() for ln in result.splitlines() if ln.strip()]
         elif name in self.doc_tools:
             # 首行是路径，后续可能有"警告:"行——只取首行；"预览:"行另作图发

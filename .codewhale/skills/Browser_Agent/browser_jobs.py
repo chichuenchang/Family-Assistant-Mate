@@ -75,6 +75,11 @@ def _update(d: Path, jid: str, change: Callable[[dict], None]) -> Optional[dict]
 
 # ── 提交 / 停止 ─────────────────────────────────────────
 
+def busy(*, jdir: Optional[Path] = None) -> Optional[dict]:
+    """占着浏览器槽位的任务（任何频道、任何人），没有 = None。"""
+    return next((j for j in _jobs(jobs_dir(jdir)) if j.get("status") == "running"), None)
+
+
 def submit(task: str, channel: str, user: str, member: str, *, background: bool = True,
            runner=None, jdir: Optional[Path] = None) -> tuple[Optional[str], str]:
     task = (task or "").strip()
@@ -82,9 +87,9 @@ def submit(task: str, channel: str, user: str, member: str, *, background: bool 
         return None, "要我用浏览器做什么？请说清楚要查的内容。"
     d = jobs_dir(jdir)
     with _LOCK:
-        busy = next((j for j in _jobs(d) if j.get("status") == "running"), None)
-        if busy:
-            return None, (f"浏览器正忙（{busy.get('member') or '别人'} 的任务进行中），"
+        running = busy(jdir=d)
+        if running:
+            return None, (f"浏览器正忙（{running.get('member') or '别人'} 的任务进行中），"
                           "等它结束或让发起人说“停止浏览”。")
         jid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
         _write(d, {"id": jid, "channel": channel, "user": str(user), "member": member or "",
@@ -231,7 +236,7 @@ def deliver(push_text, push_photo, channel: str, *, jdir: Optional[Path] = None,
         _update(d, jid, lambda j: j.update(status="delivered", delivered_at=now,
                                           outcome=j.get("status")))
         count += 1
-    if jdir is None and not any(j.get("status") == "running" for j in _jobs(d)):
+    if jdir is None and busy(jdir=d) is None:
         try:
             if bc.idle_expired(cfg):
                 bc.close(cfg)

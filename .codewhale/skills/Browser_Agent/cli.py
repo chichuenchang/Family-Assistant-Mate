@@ -34,7 +34,7 @@ def main() -> int:
     if args.member not in names:
         print(f"[错误] 未登记的成员：{args.member}。已登记：{'、'.join(names) or '（无）'}")
         return 1
-    if any(j.get("status") == "running" for j in browser_jobs._jobs(browser_jobs.jobs_dir())):
+    if browser_jobs.busy():
         print("[错误] 浏览任务进行中，等它结束再登录")
         return 1
     try:

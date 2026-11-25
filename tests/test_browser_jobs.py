@@ -88,6 +88,13 @@ def test_busy_is_global_across_users(jdir):
     assert jid is None and "Jim" in msg
 
 
+def test_busy_reports_running_job_until_finished(jdir):
+    jid = sub(jdir)
+    assert bj.busy(jdir=jdir)["id"] == jid
+    bj._run_job(jid, runner=ok, jdir=jdir)
+    assert bj.busy(jdir=jdir) is None
+
+
 def test_run_success(jdir):
     jid = sub(jdir)
     bj._run_job(jid, runner=ok, jdir=jdir)

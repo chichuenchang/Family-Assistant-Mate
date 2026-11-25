@@ -42,6 +42,7 @@ python .codewhale/skills/Any_Search/cli.py any-images --query "praying mantis" -
 
 ## 搜图（`fetch_images`）
 
+- 后备：平时找图走 [Browser_Agent](../Browser_Agent/SKILL.md) `browse`，它不可用才用本工具。
 - 源：AnySearch `resource.image`（Unsplash/Pexels/Pixabay 图库，实测 540ms）→ 一张都没存下才走 Bing 图片页抓 `murl`（人物/商品/新闻图库没有；HTML 解析，Bing 改版即失效）。
 - 图库以英文为主：schema 让 LLM 先把中文译成英文再查。
 - 落盘 `data/<成员>/cache/web_images/`，7 天后下次搜图时清理，不入备份（`backup_sync._HARD_EXCLUDE_DIRS`）。

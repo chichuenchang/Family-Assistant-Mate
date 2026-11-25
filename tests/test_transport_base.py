@@ -252,3 +252,46 @@ def test_failed_push_text_not_recorded():
     t = Refusing()
     assert t.push_text("u1", "新邮件") is False
     assert t.calls == []
+
+
+# ── 后台推图（MEDIA_TICKS：浏览截图途中推送） ────────────────
+
+def test_push_photo_gated_and_sent(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_ROOT", str(tmp_path))
+    img, _ = _seed(tmp_path)
+    t = FakeTransport()
+    assert t.push_photo("u1", img) is True
+    assert t.calls[-1][:2] == ("photo", "u1")
+
+
+def test_push_photo_refuses_outside_data_root(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_ROOT", str(tmp_path / "d"))
+    (tmp_path / "secret.png").write_bytes(b"x")
+    t = FakeTransport()
+    assert t.push_photo("u1", "../secret.png") is False and t.calls == []
+
+
+def test_push_photo_false_when_send_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_ROOT", str(tmp_path))
+    img, _ = _seed(tmp_path)
+    t = FakeTransport()
+    t.send_photo = lambda target, path: (_ for _ in ()).throw(RuntimeError("net"))
+    assert t.push_photo("u1", img) is False
+
+
+def test_push_photo_false_when_send_returns_false(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_ROOT", str(tmp_path))
+    img, _ = _seed(tmp_path)
+    t = FakeTransport()
+    t.send_photo = lambda target, path: False
+    assert t.push_photo("u1", img) is False
+
+
+def test_fast_tick_runs_media_ticks_with_three_args(monkeypatch):
+    got = []
+    monkeypatch.setattr(tb.REGISTRY, "fast_ticks", [])
+    monkeypatch.setattr(tb.REGISTRY, "media_ticks",
+                        [lambda pt, pp, ch: got.append((pt.__name__, pp.__name__, ch))])
+    t = FakeTransport()
+    t.fast_tick()
+    assert got == [("push_text", "push_photo", t.channel)]

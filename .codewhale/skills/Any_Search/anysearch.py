@@ -17,7 +17,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-import project_env  # Agent_Runtime, on sys.path via bootstrap
+import paths as _paths  # Agent_Runtime, on sys.path via bootstrap
+import project_env
 
 CAP = 6000              # max chars handed back to the LLM (DeepSeek max_tokens is tight)
 _TRUNC = "…[截断]"
@@ -159,16 +160,6 @@ def sniff_image_ext(data):
     return None
 
 
-def _prune_old(dest_dir, retention_days):
-    cutoff = time.time() - retention_days * 86400
-    for f in dest_dir.iterdir():
-        try:
-            if f.is_file() and f.stat().st_mtime < cutoff:
-                f.unlink()
-        except OSError:
-            pass
-
-
 def _save_images(urls, want, *, download, dest_dir, stem, deadline):
     saved = []
     for url in urls[:want * _IMG_TRIES]:
@@ -202,7 +193,7 @@ def fetch_images(query, *, call, download, dest_dir, count=None, fallback=None,
         want = 3
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    _prune_old(dest_dir, IMG_RETENTION_DAYS)
+    _paths.prune_older(dest_dir, IMG_RETENTION_DAYS)
     slug = re.sub(r"[^0-9A-Za-z一-鿿]+", "_", q).strip("_")[:40] or "image"
     stem = f"{int(time.time())}_{slug}"
     sources = [lambda: parse_image_urls(call("search", {

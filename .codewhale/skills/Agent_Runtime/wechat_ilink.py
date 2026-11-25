@@ -274,7 +274,10 @@ class WeChatTransport(Transport):
             self._bot_for(target).send_text(target, text)
 
     def send_photo(self, target, path: str) -> None:
-        target.reply_image(path)
+        if hasattr(target, "reply_image"):
+            target.reply_image(path)
+        else:
+            self._bot_for(target).send_image(target, path)
 
     def send_document(self, target, path: str) -> None:
         target.reply_file(path)

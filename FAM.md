@@ -19,6 +19,7 @@
 | **Mail Keeper** | 按成员私有的邮箱：查收/读全文/回信/发新信，可带附件（发信须用户下一条消息确认才发出，闸门在代码里；回信收件人由原信决定），可选新邮件播报（AI 判需处理才报，发件人+主题+一行理由；说"这种别推"/"漏推了"即学会 mute/always 该类）；建 Gmail 过滤器把某类信分到别的标签（同样两轮确认）；当前 Gmail provider，可按契约换 | [SKILL.md](.codewhale/skills/Mail_Keeper/SKILL.md) | 邮件、邮箱、Gmail、回邮件、查收邮件 |
 | **Remote Backup** | 用户数据云盘镜像（可选；作者已实现 Google Drive provider，用户可按契约换成自己想要的云端存储） | [SKILL.md](.codewhale/skills/Remote_Backup/SKILL.md) | 备份、同步、云盘、恢复数据 |
 | **Web Reach** | 只读联网：搜最新资讯、抓取/总结网页、转写 YouTube 字幕（搜索需付费 key；YouTube 需 yt-dlp，缺失优雅降级） | [SKILL.md](.codewhale/skills/Web_Reach/SKILL.md) | 最新新闻、查一下、外面在发生什么、总结链接、YouTube、视频 |
+| **Browser Agent** | 后台驱动电脑上可见 Chrome：跨平台比价（机票/酒店/商品）、看地图、找图、任意网站，途中推截图，只查不买（付款/下单按钮代码拦截）；需 playwright + Chrome | [SKILL.md](.codewhale/skills/Browser_Agent/SKILL.md) | 比价、机票、酒店、买东西、地图、找图片、打开网站、截图 |
 | **Any Search** | 垂直领域（finance/health/academic/code 等）结构化搜索 + 网页全文抽取 + 搜图（可选 `ANYSEARCH_API_KEY`，未配置走匿名） | [SKILL.md](.codewhale/skills/Any_Search/SKILL.md) | 行情、学术、健康、垂直领域查询、图片 |
 | **Agent Runtime** | 频道无关 Agent 大脑 + 远程频道传输层（微信、Telegram）+ 懂王（KnowKing）跨平台舆情桥（外部 uv 项目，后台跑 + 完成推送） | [SKILL.md](.codewhale/skills/Agent_Runtime/SKILL.md) | 远程频道、微信、Telegram、Bot 接入、Agent 核心、新增频道、knowking、kk、懂王 |
 
@@ -87,6 +88,7 @@ python .codewhale/skills/Agent_Runtime/wechat_ilink.py --mode run
 | `agent`（context_max_tokens/idle_clear_hours/tool_rounds） | `agent_core`（单条消息工具往返上限；上下文自动管理：历史 token 预算超出→从最旧一问一答成对丢弃；用户闲置超 N 小时→下一条消息前清空其历史；0=关闭。用户也可发 /clear 手动清空） |
 | ~~`members`~~（已迁出 → `data/members.json`，git 不跟踪） | `Agent_Runtime/members.py`（resolve / member-* 读写均走该文件） |
 | `wechat.allowed_commands` | `Expense_Tracker/agent_tools.py`（AGENT_COMMANDS；其余 skill 的命令由各自 manifest 恒定放行） |
+| `browser` | `Browser_Agent/browser_cfg.py`（每次读，缺键取默认；键义见其 `_comment`） |
 | `knowking`（project_dir/timeout_s） | `Agent_Runtime/knowking_jobs.py`（懂王舆情桥：KnowKing 项目根定位 + `kk ask` 子进程超时；环境变量 `KNOWKING_DIR` 可覆盖 project_dir） |
 
 改这些值只改 `config.json`（改后重启进程生效）。config 缺失/损坏时各处有应急回退默认值。

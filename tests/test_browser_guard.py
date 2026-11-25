@@ -28,6 +28,34 @@ def test_navigate_refused(url):
     assert g.check_navigate(url)
 
 
+@pytest.mark.parametrize("host", ["127.1", "0x7f000001", "2130706433", "0177.0.0.1", "10.1",
+                                  "[::ffff:127.0.0.1]", "127.0.0.1."])
+def test_ip_literal_shorthand_refused(host):
+    assert "局域网" in g.check_navigate(f"http://{host}/x.png")
+
+
+def _resolver(*ips):
+    return lambda host, port: [(2, 1, 6, "", (ip, 0)) for ip in ips]
+
+
+def test_fetch_refuses_name_resolving_to_lan():
+    assert "局域网" in g.check_fetch("https://router.example/a.png", resolve=_resolver("8.8.8.8", "192.168.1.1"))
+
+
+def test_fetch_allows_public_name():
+    assert g.check_fetch("https://img.example/a.png", resolve=_resolver("93.184.216.34")) == ""
+
+
+def test_fetch_unresolvable_refused():
+    def fail(host, port):
+        raise OSError("nx")
+    assert g.check_fetch("https://nx.example/a.png", resolve=fail)
+
+
+def test_fetch_keeps_navigate_rules():
+    assert g.check_fetch("https://cashier.alipay.com/a.png", resolve=_resolver("93.184.216.34"))
+
+
 @pytest.mark.parametrize("url", [
     "https://www.google.com/search?q=pay", "https://flights.ctrip.com/",
     "https://www.booking.com/hotel/x.html", "https://www.bestbuy.com/site/gpu",

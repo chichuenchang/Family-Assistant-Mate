@@ -16,6 +16,7 @@ import random
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urljoin
 
 from playwright.sync_api import Error as PwError
 from playwright.sync_api import TimeoutError as PwTimeout
@@ -28,6 +29,7 @@ from browser_driver import LABEL_CAP, MAX_ELEMENTS, TEXT_CAP, DriverError, Drive
 NAV_TIMEOUT_MS = 30_000
 ACTION_TIMEOUT_MS = 10_000
 IMG_MAX_BYTES = 5 * 1024 * 1024
+IMG_MAX_HOPS = 5
 
 # 元素 → {role, label, …}（Element 去掉 ref）。快照与焦点查询共用，闸门看到的标签同一口径。
 _DESCRIBE_JS = r"""
@@ -115,8 +117,8 @@ def _guard(fn):
 
 class PlaywrightDriver:
     def __init__(self, endpoint: str, *, humanize: bool = True, speed: float = 1.0,
-                 rng: random.Random | None = None, url_check=browser_guard.check_navigate):
-        self._url_check = url_check      # 图片地址由网页决定：下载前同导航一样查（防探本机/局域网）
+                 rng: random.Random | None = None, url_check=browser_guard.check_fetch):
+        self._url_check = url_check      # 图片地址由网页决定：下载前每跳都查（防探本机/局域网）
         self._humanize = humanize
         self._speed = max(float(speed), 0.1)
         self._rng = rng or random.Random()
@@ -360,16 +362,7 @@ class PlaywrightDriver:
         src = self._locator(ref).evaluate("e => e.currentSrc || e.src || ''")
         if not src:
             raise DriverError("这个元素不是图片")
-        if src.startswith("data:"):
-            data = base64.b64decode(src.split(",", 1)[1])
-        else:
-            reason = self._url_check(src)
-            if reason:
-                raise DriverError(f"不下载这张图：{reason}")
-            resp = self._ctx.request.get(src, timeout=15_000)
-            if not resp.ok:
-                raise DriverError(f"图片下载失败 HTTP {resp.status}")
-            data = resp.body()
+        data = base64.b64decode(src.split(",", 1)[1]) if src.startswith("data:") else self._download(src)
         if len(data) > IMG_MAX_BYTES:
             raise DriverError("图片超过 5 MB")
         ext = next((e for magic, e in _MAGIC if data.startswith(magic)), None)
@@ -380,6 +373,21 @@ class PlaywrightDriver:
         out = dest / f"{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}{ext}"
         out.write_bytes(data)
         return out
+
+    def _download(self, url: str) -> bytes:
+        """重定向不自动跟：每一跳都过 url_check，公网图跳到局域网地址也拦得住。"""
+        for _ in range(IMG_MAX_HOPS + 1):
+            reason = self._url_check(url)
+            if reason:
+                raise DriverError(f"不下载这张图：{reason}")
+            resp = self._ctx.request.get(url, timeout=15_000, max_redirects=0)
+            location = resp.headers.get("location")
+            if not (300 <= resp.status < 400 and location):
+                if not resp.ok:
+                    raise DriverError(f"图片下载失败 HTTP {resp.status}")
+                return resp.body()
+            url = urljoin(url, location)
+        raise DriverError("图片重定向次数过多")
 
     def url(self) -> str:
         try:

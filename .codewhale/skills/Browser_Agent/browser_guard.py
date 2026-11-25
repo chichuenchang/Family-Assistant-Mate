@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import socket
 import unicodedata
 from urllib.parse import urlsplit
 
@@ -60,14 +61,35 @@ def check_press(key: str, role: str, label: str) -> str:
     return ""
 
 
+_NUM_LABEL = re.compile(r"(?i)^(?:0x[0-9a-f]*|\d+)$")
+
+
+def _ip_of(host: str):
+    """主机名若是 IP 字面量 → ip_address，否则 None。含浏览器认的简写/十六进制/十进制
+    IPv4（127.1、0x7f000001、2130706433 都是 127.0.0.1），ipaddress 不认，inet_aton 认。"""
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    h = host.rstrip(".")
+    if h and all(_NUM_LABEL.match(p) for p in h.split(".")):
+        try:
+            return ipaddress.ip_address(socket.inet_aton(h))
+        except OSError:
+            return None
+    return None
+
+
+def _local_ip(ip) -> bool:
+    ip = getattr(ip, "ipv4_mapped", None) or ip
+    return ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_unspecified
+
+
 def _local_host(host: str) -> bool:
     if host == "localhost" or host.endswith(".localhost"):
         return True
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_unspecified
+    ip = _ip_of(host)
+    return ip is not None and _local_ip(ip)
 
 
 def check_navigate(url: str) -> str:
@@ -85,6 +107,23 @@ def check_navigate(url: str) -> str:
         return f"{host} 是付款页面，留给用户本人处理"
     if {seg.lower() for seg in parts.path.split("/")} & _PAY_PATH_SEGMENTS:
         return "这是付款/结算页面，留给用户本人处理"
+    return ""
+
+
+def check_fetch(url: str, *, resolve=socket.getaddrinfo) -> str:
+    """代码直接下载（存原图）前：导航规则 + 域名解析到本机/局域网也拒（落地检查管不到下载）。"""
+    reason = check_navigate(url)
+    if reason:
+        return reason
+    host = urlsplit(url.strip()).hostname or ""
+    if _ip_of(host) is not None:
+        return ""
+    try:
+        addrs = {a[4][0] for a in resolve(host, None)}
+    except OSError:
+        return "域名解析失败"
+    if any(_local_ip(ipaddress.ip_address(a.split("%", 1)[0])) for a in addrs):
+        return "不访问本机或局域网地址"
     return ""
 
 

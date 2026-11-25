@@ -27,6 +27,7 @@ PAGE = """<!doctype html><html><head><meta charset=utf-8><title>t</title></head>
 <div style="height:2500px"></div>
 <button onclick="document.title='far'">Far</button>
 <img src="/big.png" alt="cat" width=300 height=300>
+<img src="/jump.png" alt="jump" width=300 height=300>
 <script>window.moves=[];addEventListener('mousemove',e=>moves.push({trusted:e.isTrusted}))</script>
 </body></html>"""
 
@@ -44,7 +45,18 @@ def site():
     (root / "other.html").write_text("<title>other</title>other", encoding="utf-8")
     from PIL import Image
     Image.new("RGB", (300, 300), (200, 30, 30)).save(root / "big.png")
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/jump.png":            # 重定向到另一张图：测下载逐跳检查
+                self.send_response(302)
+                self.send_header("Location", "/big.png")
+                self.end_headers()
+                return
+            super().do_GET()
+
+        def log_message(self, *a):
+            pass
+    handler = functools.partial(Handler, directory=str(root))
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{srv.server_address[1]}/index.html"
@@ -165,15 +177,33 @@ def test_screenshot_works_when_window_minimized(drv, tmp_path):
 
 
 def test_fetch_image(drv, tmp_path):
-    assert drv.fetch_image(ref_of(drv, "image"), tmp_path).suffix == ".png"
+    assert drv.fetch_image(ref_of(drv, "image", "cat"), tmp_path).suffix == ".png"
+
+
+def test_fetch_image_follows_allowed_redirect(drv, tmp_path):
+    assert drv.fetch_image(ref_of(drv, "image", "jump"), tmp_path).suffix == ".png"
+
+
+def test_fetch_image_checks_every_redirect_hop(drv, tmp_path, monkeypatch):
+    import browser_driver as bd
+    seen = []
+
+    def check(url):
+        seen.append(url)
+        return "不访问本机或局域网地址" if url.endswith("/big.png") else ""
+    monkeypatch.setattr(drv, "_url_check", check)
+    with pytest.raises(bd.DriverError, match="局域网"):
+        drv.fetch_image(ref_of(drv, "image", "jump"), tmp_path)
+    assert [u.rsplit("/", 1)[1] for u in seen] == ["jump.png", "big.png"]
+    assert not list(tmp_path.iterdir())
 
 
 def test_fetch_image_refuses_local_network_src(drv, tmp_path, monkeypatch):
     import browser_driver as bd
     import browser_guard
-    monkeypatch.setattr(drv, "_url_check", browser_guard.check_navigate)
+    monkeypatch.setattr(drv, "_url_check", browser_guard.check_fetch)
     with pytest.raises(bd.DriverError, match="本机或局域网"):
-        drv.fetch_image(ref_of(drv, "image"), tmp_path)
+        drv.fetch_image(ref_of(drv, "image", "cat"), tmp_path)
     assert not list(tmp_path.iterdir())
 
 

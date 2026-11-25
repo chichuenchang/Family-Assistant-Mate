@@ -92,14 +92,13 @@ class _Run:
         return f"[拦截] {reason}"
 
     def _after_action(self, what: str, ok: str) -> str:
+        self.snap = None
         url = self.driver.url()
         if url and not url.startswith(_SKIP_LANDING):
             reason = guard.check_navigate(url)
             if reason:
                 self.driver.back()
-                self.snap = None
                 return self._refuse(what, f"{reason}（已自动后退）")
-        self.snap = None
         return ok
 
     def _element(self, ref: str):
@@ -210,7 +209,7 @@ class _Run:
         try:
             args = json.loads(raw_args or "{}")
         except (TypeError, ValueError):
-            return "[错误] 参数不是合法 JSON"
+            args = None
         if not isinstance(args, dict):
             return "[错误] 参数不是合法 JSON"
         try:

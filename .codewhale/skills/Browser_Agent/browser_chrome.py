@@ -88,6 +88,15 @@ def _quit(ep: str) -> None:
     browser_playwright.quit(ep)
 
 
+def _poll(cond, seconds: float, sleep) -> bool:
+    """每 0.5 秒查一次 cond，seconds 内成真 = True。"""
+    for _ in range(int(seconds / 0.5)):
+        if cond():
+            return True
+        sleep(0.5)
+    return False
+
+
 def close(cfg: dict, *, quit_fn=None, kill_fn=None, probe=is_up, sleep=time.sleep) -> None:
     """先礼（Browser.close）后兵（杀进程）；状态文件总会清掉。"""
     port = cfg["port"]
@@ -98,13 +107,8 @@ def close(cfg: dict, *, quit_fn=None, kill_fn=None, probe=is_up, sleep=time.slee
                 (quit_fn or _quit)(endpoint(port))
             except Exception:
                 pass
-            for _ in range(int(_CLOSE_WAIT_S / 0.5)):
-                if not probe(port):
-                    break
-                sleep(0.5)
-            else:
-                if pid:
-                    (kill_fn or _kill)(pid)
+            if not _poll(lambda: not probe(port), _CLOSE_WAIT_S, sleep) and pid:
+                (kill_fn or _kill)(pid)
     finally:
         _state_path().unlink(missing_ok=True)
 
@@ -127,10 +131,8 @@ def ensure(member: str, cfg: dict, *, popen=subprocess.Popen, probe=is_up, sleep
     profile = _paths.member_browser_profile_dir(member)
     proc = popen(launch_argv(exe, profile, port),
                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(int(_LAUNCH_WAIT_S / 0.5)):
-        if probe(port):
-            jsonfile.save(_state_path(), {"member": member, "pid": proc.pid, "port": port,
-                                          "last_used": time.time()})
-            return endpoint(port)
-        sleep(0.5)
-    raise ChromeError(f"Chrome 启动后 {_LAUNCH_WAIT_S} 秒没响应")
+    if not _poll(lambda: probe(port), _LAUNCH_WAIT_S, sleep):
+        raise ChromeError(f"Chrome 启动后 {_LAUNCH_WAIT_S} 秒没响应")
+    jsonfile.save(_state_path(), {"member": member, "pid": proc.pid, "port": port,
+                                  "last_used": time.time()})
+    return endpoint(port)

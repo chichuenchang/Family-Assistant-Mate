@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading
@@ -19,6 +18,7 @@ from typing import Callable, Optional
 
 import browser_cfg
 import browser_chrome as bc
+import jsonfile
 import paths as _paths
 import tool_runtime as rt
 from browser_loop import Result
@@ -41,27 +41,15 @@ def _path(d: Path, jid: str) -> Path:
 
 
 def _read(d: Path, jid: str) -> Optional[dict]:
-    try:
-        return json.loads(_path(d, jid).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+    return jsonfile.load_dict(_path(d, jid)) or None
 
 
 def _write(d: Path, job: dict) -> None:
-    p = _path(d, job["id"])
-    tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, p)
+    jsonfile.save(_path(d, job["id"]), job)
 
 
 def _jobs(d: Path) -> list[dict]:
-    out = []
-    for f in sorted(d.glob("*.json")):
-        try:
-            out.append(json.loads(f.read_text(encoding="utf-8")))
-        except (OSError, ValueError):
-            continue
-    return out
+    return [j for f in sorted(d.glob("*.json")) if (j := jsonfile.load_dict(f))]
 
 
 def _update(d: Path, jid: str, change: Callable[[dict], None]) -> Optional[dict]:
@@ -132,23 +120,13 @@ def _emit(d: Path, jid: str, path: str, caption: str) -> None:
     _update(d, jid, lambda j: j["outbox"].append({"path": _paths.to_rel(path), "caption": caption}))
 
 
-def _prune(folder: Path) -> None:
-    cutoff = time.time() - _CACHE_DAYS * 86400
-    for f in folder.iterdir():
-        try:
-            if f.is_file() and f.stat().st_mtime < cutoff:
-                f.unlink()
-        except OSError:
-            pass
-
-
 def _default_runner(job: dict, emit, stopped) -> Result:
     import browser_loop
     import llm_client
     cfg = browser_cfg.load()
     member = job["member"]
     shots = _paths.member_cache_dir(member, "browser")
-    _prune(shots)
+    _paths.prune_older(shots, _CACHE_DAYS)
     try:
         ep = bc.ensure(member, cfg)
     except bc.ChromeError as e:

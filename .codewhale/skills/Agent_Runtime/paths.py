@@ -26,6 +26,7 @@ config.json：data_root（默认 data）、family_dir_name（默认 Family）。
 from __future__ import annotations
 
 import os
+import time
 from datetime import date
 from pathlib import Path
 
@@ -176,6 +177,17 @@ def member_cache_dir(member: str, name: str) -> Path:
             pass
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def prune_older(folder: Path, days: float) -> None:
+    """删 folder 下 mtime 超过 days 天的文件（缓存保留期）；单个删不掉跳过。"""
+    cutoff = time.time() - days * 86400
+    for f in folder.iterdir():
+        try:
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                f.unlink()
+        except OSError:
+            pass
 
 
 def member_domain_image_dir(member: str, domain: str, dt: date | None = None) -> Path:

@@ -25,6 +25,7 @@ from playwright.sync_api import sync_playwright
 import browser_guard
 import browser_humanize as hz
 from browser_driver import LABEL_CAP, MAX_ELEMENTS, TEXT_CAP, DriverError, DriverGone, Element, Snapshot
+from image_sniff import image_format
 
 NAV_TIMEOUT_MS = 30_000
 ACTION_TIMEOUT_MS = 10_000
@@ -94,7 +95,7 @@ _TAG_JS = "([start, cap, labelCap]) => {" + _DESCRIBE_JS + r"""
 }
 """
 
-_MAGIC = [(b"\xff\xd8\xff", ".jpg"), (b"\x89PNG", ".png"), (b"GIF8", ".gif")]
+_SENDABLE_EXT = {"jpeg": ".jpg", "png": ".png", "gif": ".gif"}  # 微信发不了 webp：转 png
 
 
 def _guard(fn):
@@ -365,7 +366,7 @@ class PlaywrightDriver:
         data = base64.b64decode(src.split(",", 1)[1]) if src.startswith("data:") else self._download(src)
         if len(data) > IMG_MAX_BYTES:
             raise DriverError("图片超过 5 MB")
-        ext = next((e for magic, e in _MAGIC if data.startswith(magic)), None)
+        ext = _SENDABLE_EXT.get(image_format(data))
         if ext is None:
             data, ext = _to_png(data), ".png"
         dest = Path(dest_dir)
